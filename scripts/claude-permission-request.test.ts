@@ -1,17 +1,15 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createReceiver } from "../server/receiver.ts";
 import type { HarborEvent } from "../src/events.ts";
+import { createClaudeHooks } from "./claude-hooks.ts";
 
 const project = fileURLToPath(new URL("../", import.meta.url));
-const settings = JSON.parse(
-  readFileSync(new URL("../.claude/settings.json", import.meta.url), "utf8"),
-);
+const settings = { hooks: createClaudeHooks() };
 const registration = settings.hooks.PermissionRequest[0];
 
 async function runHook(input: string, port: number) {

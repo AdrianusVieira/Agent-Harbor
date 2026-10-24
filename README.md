@@ -2,9 +2,9 @@
 
 A local command center for AI work sessions. Track Claude and Codex across apps and editors, see what’s running, and get notified when a session needs your attention.
 
-That is the direction. The current learning milestone is smaller: **show Claude Code session startup, submitted prompts, tool permission requests, tool results, and finished responses**. Six project-local hooks are implemented. Automatic discovery of already-running sessions, global hook installation, direct approval decisions, notifications, and orchestration are not implemented yet.
+That is the direction. The current learning milestone is smaller: **show Claude Code session startup, submitted prompts, tool permission requests, and finished responses**. Four Claude Code hooks can be installed once at user level for local projects. Automatic discovery of already-running sessions, direct approval decisions, notifications, and orchestration are not implemented yet.
 
-**Current focus:** custom names, startup, submitted prompts, permission requests, successful tool results, and reply-ready delivery are verified with real sessions. Choose the next small increment together. Failure and interruption paths have automated coverage only. Coding assistants should read [AGENTS.md](AGENTS.md); [CLAUDE.md](CLAUDE.md) points to the same shared guidance.
+**Current focus:** user-level hooks are installed on this machine. On 2026-10-24, the user confirmed the revised Claude Code behavior after removing per-tool events. Custom names, startup, submitted prompts, permission requests, and reply-ready delivery were verified with project-local registrations. Per-tool success and failure events have been removed to keep the stream focused on session attention and finished responses. Coding assistants should read [AGENTS.md](AGENTS.md); [CLAUDE.md](CLAUDE.md) points to the same shared guidance.
 
 ## Run locally
 
@@ -26,9 +26,38 @@ Open <http://127.0.0.1:5173>. The same development server serves the React UI an
 - Replays the latest 500 events on browser reconnect. Events are held in memory and disappear when the dev server restarts.
 - Clears the current browser view without deleting the server buffer. Reloading the page restores that buffer. Counts describe the visible history; they are not a global inventory of running agents. The attention filter shows historical attention events, including ones later followed by other events.
 
-## Try the Claude Code hook
+## Install user-level Claude Code hooks
 
-This is a project-local experiment. [`.claude/settings.json`](.claude/settings.json) registers a command hook for `SessionStart` with the `startup` matcher. When Claude Code starts a new session in this repo, it supplies JSON on stdin to [`scripts/claude-session-start.ts`](scripts/claude-session-start.ts). The adapter posts a `started` event to Harbor:
+From this checkout, run:
+
+```sh
+npm run hooks:preview
+npm run hooks:install
+```
+
+The preview shows only Harbor's proposed commands and does not write files. Installation merges four registrations into `~/.claude/settings.json` (or `settings.json` under `CLAUDE_CONFIG_DIR` when set). Existing telemetry, model, plugin, permission, and unrelated hook settings are preserved. Before each actual settings change, setup writes a private backup alongside the file and prints its path; repeat installation does not add duplicate handlers or another backup when nothing changes. Invalid JSON or malformed hook groups stop setup without overwriting settings.
+
+[`scripts/claude-hooks.ts`](scripts/claude-hooks.ts) generates the registrations. Commands contain absolute paths to the Node executable used during setup, this checkout's local `tsx` CLI, and each adapter. They work from another repository without dependencies or scripts in that repository. This initial installer targets macOS/POSIX shells. Keep this checkout and its dependencies available; rerun installation if you move it or replace the Node installation.
+
+Each managed command ends with `# agent-harbor`, a shell comment used to identify Harbor's handlers. Setup and uninstall replace/remove only handlers with that marker, including within groups shared with other hooks. The old project-local registrations have been removed from this repository to avoid duplicate events. Hook definitions in other projects are not edited.
+
+To remove Harbor's user-level hooks:
+
+```sh
+npm run hooks:uninstall
+```
+
+This preserves unrelated settings and hooks, makes a backup when settings change, and leaves the receiver available. Backups stay in your Claude configuration directory; they are not committed to this repo.
+
+User-level hooks apply to local Claude Code projects, subject to Claude's normal trust and policy controls; they do not configure cloud sessions, Cowork, or other machines. Keep `npm run dev` running on port **5173**. Open a fresh Claude Code session after installation or removal so it loads the intended registrations. See the [official hook locations](https://code.claude.com/docs/en/hooks#hook-locations).
+
+For the real check, keep Harbor resumed on **All events**, with search cleared. Open **another repository** in Claude Code, start a fresh session, assign a name with `/rename Harbor global check`, and send **Without using tools, reply only with: Global hook check complete.** Look for one startup event and one prompt/ready sequence, with the custom name on the prompt and ready events. Report whether the events arrive and whether any are duplicated. This cross-repository Claude check is pending; automated tests run all four installed commands from a temporary foreign project directory without calling Claude.
+
+On 2026-10-24, six handlers were installed in the user-level settings on this machine. Comparison against the private backup verified that removing only Harbor’s handlers reproduces the original settings, including telemetry and plugins. The project-local registrations were removed. The user-level configuration was then updated to four handlers: startup, prompt submission, permission requests, and response completion. Reinstallation removes the two obsolete Harbor tool-result handlers while preserving unrelated hooks. The user confirmed the revised Claude Code behavior after this update; the repository used for that check was not specified.
+
+## Observe Claude Code startup
+
+The user-level `SessionStart` registration uses the `startup` matcher. When Claude Code starts a new session in this repo, it supplies JSON on stdin to [`scripts/claude-session-start.ts`](scripts/claude-session-start.ts). The adapter posts a `started` event to Harbor:
 
 ```text
 Claude Code startup → adapter script → POST /api/events → existing UI
@@ -43,18 +72,18 @@ The hook runs in the background, and its HTTP request has a 1.5-second timeout. 
 
 The session ID, fixed message, and optional custom session title are forwarded; the script does not read transcript files or send the working directory, model, or prompts. Its destination is always `127.0.0.1`. The optional `HARBOR_PORT` environment variable changes the receiver port from its default `5173` (run Vite on the same port if you change it).
 
-The startup hook ignores existing sessions, resumes, `/clear`, and compaction. Starting a session does not prove it is actively working. These project hooks do not configure your other repositories or change `~/.claude/settings.json`.
+The startup hook ignores existing sessions, resumes, `/clear`, and compaction. Starting a session does not prove it is actively working. After user-level installation, the same commands apply to your other local repositories too; no repository-local registration is required.
 
-For troubleshooting, check the hook registration in Claude Code's `/hooks` menu where available and its debug output for `Agent Harbor: session-start event not delivered`. The registration uses the installed project-local `tsx` binary, so Node.js and this repo's npm dependencies must be available to the Claude process. The user confirmed delivery from a real new Claude Code session on 2026-10-23. See the [official hooks reference](https://code.claude.com/docs/en/hooks#sessionstart).
+For troubleshooting, check the hook registration in Claude Code's `/hooks` menu where available and its debug output for `Agent Harbor: session-start event not delivered`. The registration uses absolute paths to Node, this checkout's `tsx` CLI, and the adapter; those files must remain available. The user confirmed delivery from a real new Claude Code session on 2026-10-23. See the [official hooks reference](https://code.claude.com/docs/en/hooks#sessionstart).
 
-To disable this trial, remove its `SessionStart` entry from `.claude/settings.json` and start a fresh session.
+To disable only startup monitoring, remove the Harbor handler under `SessionStart` in your user settings, preserving any other handlers, then start a fresh session. Use `npm run hooks:uninstall` to remove all Harbor handlers.
 
 ## Try the permission-request hook
 
-[`.claude/settings.json`](.claude/settings.json) also registers `PermissionRequest` for all tool names. [`scripts/claude-permission-request.ts`](scripts/claude-permission-request.ts) sends an event with the same `claude-code` source and session ID as the startup event, type `waiting`, and a message such as **Claude Code requested permission to use Bash.** The existing UI displays it as **needs input** and includes it in the Attention filter.
+The generated user-level hooks also register `PermissionRequest` for all tool names. [`scripts/claude-permission-request.ts`](scripts/claude-permission-request.ts) sends an event with the same `claude-code` source and session ID as the startup event, type `waiting`, and a message such as **Claude Code requested permission to use Bash.** The existing UI displays it as **needs input** and includes it in the Attention filter.
 
 1. Keep `npm run dev` running and the Harbor view resumed, with no search filter.
-2. Start a new Claude Code session in this repository so it loads the updated project hooks. Use the normal approval mode, with auto-approval disabled for the operation you are checking.
+2. Start a new Claude Code session in this repository so it loads the installed user-level hooks. Use the normal approval mode, with auto-approval disabled for the operation you are checking.
 3. Ask Claude to run a harmless command such as `npm run typecheck`. When an actual tool permission prompt appears, leave it unanswered briefly and check Harbor for **needs input**. A conversational question from Claude is not a tool permission prompt.
 4. Approve or deny in Claude as usual, then report whether the event appeared. If the command was already allowed and no prompt appeared, report that instead; no permission event is expected in that case.
 
@@ -64,36 +93,21 @@ The user confirmed successful permission-request delivery on 2026-10-23 and supp
 
 The observer runs in the background and emits no stdout or approval decision. It uses the same localhost destination, optional `HARBOR_PORT`, and 1.5-second HTTP timeout as the startup adapter. Only the session ID and tool name are forwarded in a fixed message; tool arguments, prompts, transcript paths, and suggested permission rules are excluded. Failure prints a short stderr diagnostic and exits normally.
 
-The request event records **a permission request occurred**, not the continuing truth of "still waiting." A later tool-result event can replace the latest waiting status, as described below. Merely approving, denying, or canceling the permission dialog does not itself send a Harbor event. Hooks run asynchronously and can arrive late or out of order, especially for rapidly answered prompts; this first version does not correlate individual tool calls or reorder events.
+The request event records **a permission request occurred**, not the continuing truth of "still waiting." The next finished response replaces the latest waiting status with **reply ready**. Individual tool completions and failures do not send events, so waiting can remain displayed after approval until that response finishes. Merely approving, denying, or canceling the permission dialog does not itself send a Harbor event. Hooks run asynchronously and can arrive late or out of order, especially for rapidly answered prompts; this first version does not correlate individual tool calls or reorder events.
 
 Coverage is limited to `PermissionRequest` hooks in your installed Claude Code version. General questions, already-allowed operations, and some prompt types (including sandbox network approvals) are not covered by this hook. The event can also occur in non-interactive sessions that cannot show a prompt; this trial targets interactive sessions. See the [official PermissionRequest reference](https://code.claude.com/docs/en/hooks#permissionrequest).
 
-To disable just this observer, remove the `PermissionRequest` entry from `.claude/settings.json` and start a fresh session.
+To disable just this observer, remove the Harbor handler under `PermissionRequest` in your user settings, preserving other handlers, and start a fresh session.
 
-## Observe progress after permission
+## Keep the stream focused on responses
 
-[`scripts/claude-tool-result.ts`](scripts/claude-tool-result.ts) handles two project-local registrations:
+Harbor does not register `PostToolUse` or `PostToolUseFailure`. Completing a Bash command, or recovering from a tool error, does not mean Claude has finished responding to your prompt. Only the main response's `Stop` event emits **reply ready**.
 
-| Claude hook          | Harbor type / UI label   | What it actually establishes                                  |
-| -------------------- | ------------------------ | ------------------------------------------------------------- |
-| `PostToolUse`        | `activity` / **working** | A tool finished successfully; session activity was observed   |
-| `PostToolUseFailure` | `error` / **error**      | A tool failed, or was interrupted when `is_interrupt` is true |
-
-Both use the existing `claude-code` source and session ID, so a newly received result replaces the session's latest waiting status in the summary. A successful result can reduce the **need attention** count; an error still counts as needing attention. The Attention filter is historical and continues to show earlier waiting rows. Switch to **All events** to see successful progress rows.
-
-These hooks run **after execution**, including for already-allowed tools. Harbor will still show waiting while an approved long-running tool executes, until a result arrives. The **working** label means observed activity; it does not prove the tool is still running or the overall task is complete. The separate `Stop` observer below detects when the main response finishes.
-
-Manual denial and cancellation of a permission dialog are not reported by these result hooks, so waiting can remain in those cases until another event arrives. If Claude subsequently finishes a response, `Stop` can mark that response ready; it does not report the permission decision. `PermissionDenied` is documented for auto-mode denials, not manual denials, and is not wired here. Interrupting an executing tool can produce a failure event; that differs from canceling its permission dialog. See the official [PostToolUse](https://code.claude.com/docs/en/hooks#posttooluse), [PostToolUseFailure](https://code.claude.com/docs/en/hooks#posttoolusefailure), and [PermissionDenied](https://code.claude.com/docs/en/hooks#permissiondenied) references.
-
-To repeat the real-session check, keep Harbor resumed on **All events**, start a new Claude Code session in this repository, and ask it to run exactly `npm run typecheck`. If the command is already allowed, temporarily add a project-local Ask rule as described above. Leave the actual permission prompt open until Harbor displays **needs input**, then approve **once** and wait for the command to finish. Look for **working** with **Claude Code finished using Bash.**, or an **error** if the tool failed. Remove only the temporary Ask rule afterward, preserving other settings.
-
-On 2026-10-24, the user confirmed the successful transition and supplied a screenshot showing **needs input** followed by **working**, with **Claude Code finished using Bash.**, for the same real session. The temporary Ask rule was removed after that check. Failure and interruption mappings are covered by automated tests, but have not been confirmed by the user in real sessions.
-
-The adapter forwards only the session ID and tool name in a fixed message. Tool arguments, tool outputs, error details, and transcript paths stay out of Harbor. It emits no stdout or decisions, uses the same localhost destination and 1.5-second HTTP timeout, and tolerates delivery failure. To disable these observers, remove the `PostToolUse` and `PostToolUseFailure` entries and start a fresh session.
+Run `npm run hooks:install` to replace older Harbor registrations with the four current hooks, then start a fresh Claude Code session. Existing tool-result rows remain in the receiver's history; **Clear view** hides them from the current browser view. New events show startup, prompt submission, permission requests, and response completion.
 
 ## Observe a ready response
 
-[`.claude/settings.json`](.claude/settings.json) registers a background `Stop` command with no matcher. [`scripts/claude-reply-ready.ts`](scripts/claude-reply-ready.ts) sends `ready` with the existing source and session ID and the fixed message **Claude Code finished its response.** The existing UI shows **reply ready** and includes that session in **replies ready** when this is its latest received event.
+The generated user-level hooks register a background `Stop` command with no matcher. [`scripts/claude-reply-ready.ts`](scripts/claude-reply-ready.ts) sends `ready` with the existing source and session ID and the fixed message **Claude Code finished its response.** The existing UI shows **reply ready** and includes that session in **replies ready** when this is its latest received event.
 
 This marks the end of the main agent's current response, whether that response is a result, a question, or a progress update. It does not establish that the whole task is complete, background tasks are stopped, or all work is done. Claude documents user interrupts and API errors separately from `Stop`; this adapter does not map `StopFailure`, `SubagentStop`, or `SessionEnd` to ready. Other Stop hooks may continue the conversation, and asynchronous events can arrive late or out of order. See the [official Stop reference](https://code.claude.com/docs/en/hooks#stop).
 
@@ -107,20 +121,20 @@ The original real-session check went directly from **started** to **reply ready*
 
 On 2026-10-24, the user confirmed this check and supplied a screenshot of **started → reply ready** for the same real session, with **Claude Code finished its response.** No temporary permission rule was needed.
 
-Only the session ID and fixed message are sent; response text, background-task details, scheduled prompts, and transcript paths are excluded. The observer prints no stdout, returns no feedback or decision that would continue Claude, and exits normally on delivery failure. It uses the same localhost destination, optional `HARBOR_PORT`, and 1.5-second HTTP timeout. To disable it, remove the `Stop` entry and start a fresh session.
+Only the session ID and fixed message are sent; response text, background-task details, scheduled prompts, and transcript paths are excluded. The observer prints no stdout, returns no feedback or decision that would continue Claude, and exits normally on delivery failure. It uses the same localhost destination, optional `HARBOR_PORT`, and 1.5-second HTTP timeout. To disable it, remove only the Harbor handler under `Stop` in your user settings and start a fresh session.
 
 ## Observe a submitted prompt
 
-[`.claude/settings.json`](.claude/settings.json) registers a background `UserPromptSubmit` command with no matcher. [`scripts/claude-prompt-submit.ts`](scripts/claude-prompt-submit.ts) sends `activity` with the existing source and session ID and the fixed message **Claude Code received a prompt.** The UI shows **working** and replaces a session's previous ready status when this event arrives.
+The generated user-level hooks register a background `UserPromptSubmit` command with no matcher. [`scripts/claude-prompt-submit.ts`](scripts/claude-prompt-submit.ts) sends `activity` with the existing source and session ID and the fixed message **Claude Code received a prompt.** The UI shows **working** and replaces a session's previous ready status when this event arrives.
 
 Claude fires this event before processing the prompt. It can also fire for scheduled tasks, background subagent reports, and incoming session messages, so the message does not claim that you typed it. It does not prove model processing began: another hook may block the prompt afterward. Like the other asynchronous observers, delivery may be delayed or out of order; a fast response may finish before its prompt event arrives. See the [official UserPromptSubmit reference](https://code.claude.com/docs/en/hooks#userpromptsubmit).
 
-The session ID, fixed message, and optional custom session title are sent. Prompt text, working directories, and transcript paths are excluded. The adapter emits no stdout, context, or blocking decision, exits normally on failure, and uses the same localhost destination, optional `HARBOR_PORT`, and 1.5-second HTTP timeout. To disable it, remove the `UserPromptSubmit` entry and start a fresh session.
+The session ID, fixed message, and optional custom session title are sent. Prompt text, working directories, and transcript paths are excluded. The adapter emits no stdout, context, or blocking decision, exits normally on failure, and uses the same localhost destination, optional `HARBOR_PORT`, and 1.5-second HTTP timeout. To disable it, remove only the Harbor handler under `UserPromptSubmit` in your user settings and start a fresh session.
 
 To check the follow-up transition in a real session:
 
 1. Keep `npm run dev` running and Harbor open at <http://127.0.0.1:5173>, resumed on **All events**, with no search filter.
-2. Start a fresh Claude Code session in this repository to load the updated hooks. Ask: **Without using tools, reply only with: Harbor ready check.** Wait for **reply ready** in Harbor.
+2. Start a fresh Claude Code session in this repository to load the installed user-level hooks. Ask: **Without using tools, reply only with: Harbor ready check.** Wait for **reply ready** in Harbor.
 3. In that same Claude session, send: **Without using tools, explain Server-Sent Events in five short paragraphs.** This gives you more time to observe the intermediate status.
 4. Look for **working** with **Claude Code received a prompt.**, followed by **reply ready** with **Claude Code finished its response.**, all with the same session ID. Report whether both appeared, including their order if unexpected. A fast response may require checking the event history afterward.
 
@@ -134,7 +148,7 @@ The UI displays the custom name supplied by Claude Code, such as **Fix login**, 
 
 Claude documents this field for **custom titles**, such as one assigned with `/rename` or `--name`; its automatically generated conversation title is not included. A rename reaches Harbor on the next submitted prompt carrying the new title. Unnamed sessions and versions that omit this metadata fall back to their UUID. Harbor does not read transcripts or prompt text to invent a name. See the official [SessionStart](https://code.claude.com/docs/en/hooks#sessionstart-input) and [UserPromptSubmit](https://code.claude.com/docs/en/hooks#userpromptsubmit-input) input references.
 
-To verify in Claude Code, keep Harbor running on **All events** with the view resumed and search cleared. In a session in this repository, set a custom name with `/rename Harbor name check` where supported, then send **Without using tools, reply only with: Name check complete.** Look for **Harbor name check** on the prompt and ready events, with the same underlying ID. Rename it again and submit another prompt to check the next events use the new name. This procedure can also check a rename while preserving the underlying ID. No permission rule or global installation is needed.
+To verify in Claude Code, keep Harbor running on **All events** with the view resumed and search cleared. In a session in this repository, set a custom name with `/rename Harbor name check` where supported, then send **Without using tools, reply only with: Name check complete.** Look for **Harbor name check** on the prompt and ready events, with the same underlying ID. Rename it again and submit another prompt to check the next events use the new name. This procedure can also check a rename while preserving the underlying ID. No temporary permission rule is needed.
 
 On 2026-10-24, the user confirmed custom name display with a screenshot showing **#test2** and **#test1**, each on **working** and **reply ready** events. The screenshot hides the UUIDs, so it confirms name delivery and retention through the ready event without independently proving a rename or two distinct sessions.
 
@@ -174,7 +188,7 @@ sender → POST /api/events → in-memory buffer → SSE → React event stream
 - `server/receiver.ts` — input validation, bounded history, live delivery
 - `vite.config.ts` — mounts the receiver in the development server
 
-The startup, prompt-submit, permission-request, tool-result, and reply-ready adapters live in `scripts/`; Claude's project-local registrations live in `.claude/`.
+The startup, prompt-submit, permission-request, and reply-ready adapters live in `scripts/`; the user-level registrations are generated by `scripts/claude-hooks.ts` and installed by `scripts/configure-claude-hooks.ts`.
 
 ## Check the project
 
@@ -186,4 +200,4 @@ npm run build
 
 `npm run preview` previews the static production build only; the event receiver runs with `npm run dev`. Production packaging can be a later learning milestone.
 
-Permission request → successful tool result and reply ready → working → reply ready after a follow-up prompt are verified in real sessions. Custom session name display is also confirmed. Choose the next small increment together.
+Permission requests and reply ready → working → reply ready after a follow-up prompt are verified in real sessions. Custom session name display is also confirmed. The next check is a real Claude session from another repository after user-level installation.

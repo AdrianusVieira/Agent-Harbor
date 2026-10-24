@@ -4,7 +4,7 @@
 
 Agent Harbor is a personal learning project: a local monitor for AI work sessions across apps and editors, especially sessions waiting for the user's attention.
 
-The project-local Claude Code startup, permission-request, successful tool-result, and reply-ready hooks are verified with real sessions. On 2026-10-24, the user confirmed **needs input → working** and **started → reply ready**, supplying screenshots of both transitions. `Stop` emits `ready` when a response finishes, not when the overall task is proven complete. The `UserPromptSubmit` observer emits `activity` when a prompt is submitted. On 2026-10-24, the user also confirmed **reply ready → working → reply ready** for the same real session with a screenshot. Failure and interruption mappings have automated coverage only. The observers do not detect the instant of approval, manual denial, or permission-dialog cancellation. Startup timing investigation is complete; see README.md. Custom session names are forwarded from startup and prompt-submit hook payloads and retained by source and session ID within receiver history. On 2026-10-24, the user confirmed name display with a screenshot showing `#test1` and `#test2` on both working and reply-ready events. The screenshot does not expose the underlying IDs, so it does not independently establish whether these are two sessions or a rename. Keep the verified increment small and choose further work with the user. Automatic discovery, global hook installation, other integrations, notifications, and orchestration do not exist yet.
+The original project-local Claude Code startup, permission-request, and reply-ready hooks are verified with real sessions. On 2026-10-24, the user confirmed **needs input → working** and **started → reply ready**, supplying screenshots of both transitions. `Stop` emits `ready` when a response finishes, not when the overall task is proven complete. The `UserPromptSubmit` observer emits `activity` when a prompt is submitted. On 2026-10-24, the user also confirmed **reply ready → working → reply ready** for the same real session with a screenshot. Per-tool success, failure, and interruption observers have since been removed at the user’s request; monitor response completion with `Stop` instead. The observers do not detect the instant of approval, manual denial, or permission-dialog cancellation. Startup timing investigation is complete; see README.md. Custom session names are forwarded from startup and prompt-submit hook payloads and retained by source and session ID within receiver history. On 2026-10-24, the user confirmed name display with a screenshot showing `#test1` and `#test2` on both working and reply-ready events. The screenshot does not expose the underlying IDs, so it does not independently establish whether these are two sessions or a rename. User-level hook setup exists in `scripts/configure-claude-hooks.ts`. On 2026-10-24, six handlers were installed in the user’s Claude settings; comparison with the private backup verified all original settings were preserved. The legacy project-local registrations were removed. The user-level configuration was then updated to four handlers, with automated migration coverage removing the old tool-result handlers while preserving unrelated hooks. All four installed command shapes have automated foreign-directory coverage. On 2026-10-24, the user confirmed the revised Claude Code behavior after removing per-tool events; the repository used for that check was not specified. Keep the verified increment small and choose further work with the user. Automatic discovery, other integrations, notifications, and orchestration do not exist yet.
 
 Read [README.md](README.md) for setup, the event contract, and current limitations. Inspect the actual code before assuming a feature exists.
 
@@ -32,17 +32,18 @@ The temporary `Bash(npm run typecheck)` Ask rule was removed after the successfu
 
 - Keep the monitoring UI free of sample generators and manual event-sending controls. Start with an empty stream when the receiver has no history. Keep synthetic test traffic isolated from the user’s receiver.
 - Distinguish observed events from inferred session state. A quiet stream does not prove a session has stopped or is stuck.
-- A response being ready does not prove the overall task is complete.
+- A response being ready does not prove the overall task is complete. Do not emit per-tool completion or failure events; the user wants response-level completion. Permission requests remain visible, and their latest status can stay waiting after approval until the response finishes.
 - Use the custom session name for display when available, and source plus session ID for identity. Names can change or repeat. Only forward explicit `session_title` metadata; do not derive names from prompt or transcript content.
 - Prompt monitoring forwards no prompt text and emits no context or blocking decision. A submitted prompt does not prove model processing has started; another hook may still block it.
 - Stop monitoring must emit no feedback, blocking decisions, or nonzero exit codes that could continue Claude. Do not forward response text, background-task data, or scheduled prompts.
 - Counts reflect received, retained history; do not present them as a complete inventory of running sessions.
 - Keep the development receiver bound to loopback. Do not capture screens, install hooks, or collect session content as an incidental part of UI work.
+- User-level setup is an explicit configuration operation, separate from observers. Preserve unrelated settings and hooks. Only commands ending in ` # agent-harbor` belong to setup/uninstall. Do not re-add project-local Harbor registrations alongside the user-level hooks. Keep setup tests isolated from real user settings.
 - Permission monitoring is observational: emit no approval decisions, do not modify permission settings, and do not forward tool arguments or permission suggestions. Keep user approval in Claude Code.
 
 ## Repository map
 
-- `.claude/settings.json`: project-local Claude Code permission-request, prompt-submit, reply-ready, startup, and tool-result hooks.
+- `scripts/claude-hooks.ts`: generates absolute user-level hook commands and preserves unrelated settings when merging/removing Harbor handlers.
 - `scripts/claude-permission-request.test.ts`: permission observer delivery, privacy, and failure tests.
 - `scripts/claude-permission-request.ts`: translates tool permission requests into Harbor `waiting` events.
 - `scripts/claude-prompt-submit.test.ts`: ready-to-activity sequence, prompt privacy, and non-blocking failure tests.
@@ -51,8 +52,8 @@ The temporary `Bash(npm run typecheck)` Ask rule was removed after the successfu
 - `scripts/claude-reply-ready.ts`: reports the main agent's `Stop` event as a ready response.
 - `scripts/claude-session-start.ts`: reads Claude hook input and sends one Harbor event to localhost.
 - `scripts/claude-session-start.test.ts`: configured hook command and receiver integration tests.
-- `scripts/claude-tool-result.test.ts`: permission-to-result sequence, privacy, and failure tests.
-- `scripts/claude-tool-result.ts`: reports successful tools as activity and failed or interrupted tools as errors.
+- `scripts/configure-claude-hooks.test.ts`: settings preservation, repeat installation, uninstall, invalid input, and foreign-project command tests.
+- `scripts/configure-claude-hooks.ts`: preview/install/uninstall CLI with private backups and atomic settings replacement.
 - `server/receiver.test.ts`: receiver integration tests.
 - `server/receiver.ts`: development event validation, history, and SSE delivery.
 - `src/App.tsx`: event terminal and browser controls.

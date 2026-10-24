@@ -1,20 +1,18 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createReceiver } from "../server/receiver.ts";
 import type { HarborEvent } from "../src/events.ts";
+import { createClaudeHooks } from "./claude-hooks.ts";
 
 const project = fileURLToPath(new URL("../", import.meta.url));
-const settings = JSON.parse(
-  readFileSync(new URL("../.claude/settings.json", import.meta.url), "utf8"),
-);
+const settings = { hooks: createClaudeHooks() };
 
 async function runHook(
-  hook: "PostToolUse" | "Stop",
+  hook: "Stop" | "UserPromptSubmit",
   input: unknown,
   port: number,
 ) {
@@ -88,8 +86,12 @@ test(
     assert.equal(Object.hasOwn(settings.hooks.Stop[0], "matcher"), false);
     assert.equal(
       await runHook(
-        "PostToolUse",
-        { ...payload, hook_event_name: "PostToolUse", tool_name: "Bash" },
+        "UserPromptSubmit",
+        {
+          ...payload,
+          hook_event_name: "UserPromptSubmit",
+          prompt: "private-prompt",
+        },
         port,
       ),
       "",

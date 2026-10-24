@@ -9,6 +9,9 @@
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "dev": "vite --host 127.0.0.1 --strictPort",
+    "hooks:install": "tsx scripts/configure-claude-hooks.ts install",
+    "hooks:preview": "tsx scripts/configure-claude-hooks.ts install --dry-run",
+    "hooks:uninstall": "tsx scripts/configure-claude-hooks.ts uninstall",
     "preview": "vite preview --host 127.0.0.1 --strictPort",
     "test": "tsx --test scripts/*.test.ts server/*.test.ts",
     "typecheck": "tsc --noEmit"
