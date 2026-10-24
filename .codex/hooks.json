@@ -1,0 +1,42 @@
+{
+  "description": "Agent Harbor project-local prompt, permission, and response observers.",
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "harbor_root=\"$(git rev-parse --show-toplevel)\" && node \"$harbor_root/node_modules/tsx/dist/cli.mjs\" \"$harbor_root/scripts/codex-permission-request.ts\" # agent-harbor",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ".*"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "harbor_root=\"$(git rev-parse --show-toplevel)\" && node \"$harbor_root/node_modules/tsx/dist/cli.mjs\" \"$harbor_root/scripts/codex-reply-ready.ts\" # agent-harbor",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "harbor_root=\"$(git rev-parse --show-toplevel)\" && node \"$harbor_root/node_modules/tsx/dist/cli.mjs\" \"$harbor_root/scripts/codex-prompt-submit.ts\" # agent-harbor",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}
