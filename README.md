@@ -2,9 +2,9 @@
 
 A local command center for AI work sessions. Track Claude and Codex across apps and editors, see what’s running, and get notified when a session needs your attention.
 
-That is the direction. The current learning milestone is smaller: **show Claude Code session startup, tool permission requests, tool results, and finished responses**. Five project-local hooks are implemented. Automatic discovery of already-running sessions, direct approval decisions, prompt-start detection, notifications, and orchestration are not implemented yet.
+That is the direction. The current learning milestone is smaller: **show Claude Code session startup, submitted prompts, tool permission requests, tool results, and finished responses**. Six project-local hooks are implemented. Automatic discovery of already-running sessions, global hook installation, direct approval decisions, notifications, and orchestration are not implemented yet.
 
-**Current focus:** startup, permission requests, successful tool results, and reply-ready delivery are verified with real sessions. Choose the next small increment together. Failure and interruption paths have automated coverage only. Coding assistants should read [AGENTS.md](AGENTS.md); [CLAUDE.md](CLAUDE.md) points to the same shared guidance.
+**Current focus:** custom names, startup, submitted prompts, permission requests, successful tool results, and reply-ready delivery are verified with real sessions. Choose the next small increment together. Failure and interruption paths have automated coverage only. Coding assistants should read [AGENTS.md](AGENTS.md); [CLAUDE.md](CLAUDE.md) points to the same shared guidance.
 
 ## Run locally
 
@@ -15,13 +15,7 @@ npm install
 npm run dev
 ```
 
-Open <http://127.0.0.1:5173>. The same development server serves the React UI and receives events. Click **Send sample events** to try the full path with clearly labeled demo traffic, or send your own:
-
-```sh
-curl -X POST http://127.0.0.1:5173/api/events \
-  -H 'Content-Type: application/json' \
-  -d '{"source":"manual","sessionId":"first-session","type":"waiting","message":"Ready for your input."}'
-```
+Open <http://127.0.0.1:5173>. The same development server serves the React UI and receives events. The stream starts empty and fills with received session events. The UI has no sample generator or manual event-sending controls.
 
 ## What this version does
 
@@ -47,7 +41,7 @@ Claude Code startup → adapter script → POST /api/events → existing UI
 
 The hook runs in the background, and its HTTP request has a 1.5-second timeout. It prints nothing to stdout, returns normally on invalid input or delivery failure, and does not change permission decisions or add context to Claude. A failure prints a short diagnostic to stderr. Events missed while Harbor is offline are not queued or retried.
 
-Only the session ID and a fixed message are forwarded; the script does not read transcript files or send the working directory, model, or prompts. Its destination is always `127.0.0.1`. The optional `HARBOR_PORT` environment variable changes the receiver port from its default `5173` (run Vite on the same port if you change it).
+The session ID, fixed message, and optional custom session title are forwarded; the script does not read transcript files or send the working directory, model, or prompts. Its destination is always `127.0.0.1`. The optional `HARBOR_PORT` environment variable changes the receiver port from its default `5173` (run Vite on the same port if you change it).
 
 The startup hook ignores existing sessions, resumes, `/clear`, and compaction. Starting a session does not prove it is actively working. These project hooks do not configure your other repositories or change `~/.claude/settings.json`.
 
@@ -109,11 +103,40 @@ To check this in a real session:
 2. Start a fresh Claude Code session in this repo and ask: **Without using tools, reply only with: Harbor ready check.**
 3. Once its response finishes, look for **reply ready** and **Claude Code finished its response.** Tell us whether it appeared. No permission prompt or temporary Ask rule is needed.
 
-Responses requiring no tools can go directly from **started** to **reply ready**. Starting a follow-up prompt does not yet clear ready: `UserPromptSubmit` is not wired, so a later tool result or response-ending event is the next update. These labels describe the latest observed event rather than continuous runtime truth.
+The original real-session check went directly from **started** to **reply ready** without tools. The new `UserPromptSubmit` observer below adds **working** when the prompt event arrives, including for follow-ups. These labels describe the latest observed event rather than continuous runtime truth.
 
 On 2026-10-24, the user confirmed this check and supplied a screenshot of **started → reply ready** for the same real session, with **Claude Code finished its response.** No temporary permission rule was needed.
 
 Only the session ID and fixed message are sent; response text, background-task details, scheduled prompts, and transcript paths are excluded. The observer prints no stdout, returns no feedback or decision that would continue Claude, and exits normally on delivery failure. It uses the same localhost destination, optional `HARBOR_PORT`, and 1.5-second HTTP timeout. To disable it, remove the `Stop` entry and start a fresh session.
+
+## Observe a submitted prompt
+
+[`.claude/settings.json`](.claude/settings.json) registers a background `UserPromptSubmit` command with no matcher. [`scripts/claude-prompt-submit.ts`](scripts/claude-prompt-submit.ts) sends `activity` with the existing source and session ID and the fixed message **Claude Code received a prompt.** The UI shows **working** and replaces a session's previous ready status when this event arrives.
+
+Claude fires this event before processing the prompt. It can also fire for scheduled tasks, background subagent reports, and incoming session messages, so the message does not claim that you typed it. It does not prove model processing began: another hook may block the prompt afterward. Like the other asynchronous observers, delivery may be delayed or out of order; a fast response may finish before its prompt event arrives. See the [official UserPromptSubmit reference](https://code.claude.com/docs/en/hooks#userpromptsubmit).
+
+The session ID, fixed message, and optional custom session title are sent. Prompt text, working directories, and transcript paths are excluded. The adapter emits no stdout, context, or blocking decision, exits normally on failure, and uses the same localhost destination, optional `HARBOR_PORT`, and 1.5-second HTTP timeout. To disable it, remove the `UserPromptSubmit` entry and start a fresh session.
+
+To check the follow-up transition in a real session:
+
+1. Keep `npm run dev` running and Harbor open at <http://127.0.0.1:5173>, resumed on **All events**, with no search filter.
+2. Start a fresh Claude Code session in this repository to load the updated hooks. Ask: **Without using tools, reply only with: Harbor ready check.** Wait for **reply ready** in Harbor.
+3. In that same Claude session, send: **Without using tools, explain Server-Sent Events in five short paragraphs.** This gives you more time to observe the intermediate status.
+4. Look for **working** with **Claude Code received a prompt.**, followed by **reply ready** with **Claude Code finished its response.**, all with the same session ID. Report whether both appeared, including their order if unexpected. A fast response may require checking the event history afterward.
+
+The configured commands have automated coverage for **ready → activity → ready**, excluded prompt content, invalid input, HTTP rejection, timeout, and an offline receiver. On 2026-10-24, the user confirmed **reply ready → working → reply ready** with a screenshot showing all three events for the same session. No temporary permission rule was needed.
+
+## Custom session names
+
+The UI displays the custom name supplied by Claude Code, such as **Fix login**, instead of the UUID when available. The full session ID remains available by hovering over the name, and search matches either. Identity and session counts still use source plus session ID; names can repeat and change without merging sessions.
+
+`SessionStart` and `UserPromptSubmit` forward the optional `session_title` field as `sessionName` (non-empty, up to 200 characters). Missing or invalid titles in hook input are omitted without losing the lifecycle event. The receiver validates supplied names and carries the latest observed name forward to subsequent events for the same source and ID, including permission requests and ready responses whose hooks omit the title. Historical rows keep the name observed at that time. Names are remembered only within retained in-memory history and are lost on restart or once all events for a session are evicted.
+
+Claude documents this field for **custom titles**, such as one assigned with `/rename` or `--name`; its automatically generated conversation title is not included. A rename reaches Harbor on the next submitted prompt carrying the new title. Unnamed sessions and versions that omit this metadata fall back to their UUID. Harbor does not read transcripts or prompt text to invent a name. See the official [SessionStart](https://code.claude.com/docs/en/hooks#sessionstart-input) and [UserPromptSubmit](https://code.claude.com/docs/en/hooks#userpromptsubmit-input) input references.
+
+To verify in Claude Code, keep Harbor running on **All events** with the view resumed and search cleared. In a session in this repository, set a custom name with `/rename Harbor name check` where supported, then send **Without using tools, reply only with: Name check complete.** Look for **Harbor name check** on the prompt and ready events, with the same underlying ID. Rename it again and submit another prompt to check the next events use the new name. This procedure can also check a rename while preserving the underlying ID. No permission rule or global installation is needed.
+
+On 2026-10-24, the user confirmed custom name display with a screenshot showing **#test2** and **#test1**, each on **working** and **reply ready** events. The screenshot hides the UUIDs, so it confirms name delivery and retention through the ready event without independently proving a rename or two distinct sessions.
 
 ## Startup timing findings — 2026-10-23
 
@@ -131,6 +154,7 @@ The remaining observed delay was not isolated. Variable machine load or Claude s
 | ----------- | ------------------------------------------------------------------------- |
 | `source`    | Sender label, up to 60 characters, e.g. `manual` or a future adapter name |
 | `sessionId` | Sender’s session identifier, up to 120 characters                         |
+| `sessionName` | Optional custom display name, up to 200 characters; identity still uses source and ID |
 | `type`      | `started`, `activity`, `waiting`, `ready`, `error`, or `ended`            |
 | `message`   | Display text, up to 4,000 characters                                      |
 
@@ -150,7 +174,7 @@ sender → POST /api/events → in-memory buffer → SSE → React event stream
 - `server/receiver.ts` — input validation, bounded history, live delivery
 - `vite.config.ts` — mounts the receiver in the development server
 
-The startup, permission-request, tool-result, and reply-ready adapters live in `scripts/`; Claude's project-local registrations live in `.claude/`.
+The startup, prompt-submit, permission-request, tool-result, and reply-ready adapters live in `scripts/`; Claude's project-local registrations live in `.claude/`.
 
 ## Check the project
 
@@ -162,4 +186,4 @@ npm run build
 
 `npm run preview` previews the static production build only; the event receiver runs with `npm run dev`. Production packaging can be a later learning milestone.
 
-Permission request → successful tool result and finished response → reply ready are verified in real sessions. Choose further lifecycle coverage together.
+Permission request → successful tool result and reply ready → working → reply ready after a follow-up prompt are verified in real sessions. Custom session name display is also confirmed. Choose the next small increment together.

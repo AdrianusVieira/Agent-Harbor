@@ -10,10 +10,8 @@ try {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Invalid hook payload.");
   }
-  const { hook_event_name, session_id, source } = input as Record<
-    string,
-    unknown
-  >;
+  const { hook_event_name, session_id, session_title, source } =
+    input as Record<string, unknown>;
 
   // Also check here so a manual invocation cannot mistake a resume for a start.
   if (hook_event_name === "SessionStart" && source === "startup") {
@@ -33,6 +31,11 @@ try {
     const event: EventInput = {
       message: "Claude Code session started.",
       sessionId: session_id.trim(),
+      ...(typeof session_title === "string" &&
+      session_title.trim() &&
+      session_title.length <= 200
+        ? { sessionName: session_title.trim() }
+        : {}),
       source: "claude-code",
       type: "started",
     };

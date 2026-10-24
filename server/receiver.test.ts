@@ -43,6 +43,9 @@ test("receiver validates events and delivers live events and reconnect history",
     async () => {
       assert.equal((await post({ ...valid, type: "finished" })).status, 400);
       assert.equal((await post({ ...valid, source: "" })).status, 400);
+      for (const sessionName of [null, "", " ", 42, "x".repeat(201)]) {
+        assert.equal((await post({ ...valid, sessionName })).status, 400);
+      }
       assert.equal(
         (await post({ ...valid, message: "x".repeat(4001) })).status,
         400,
@@ -108,6 +111,42 @@ test("receiver validates events and delivers live events and reconnect history",
       assert.ok(history.startsWith("event: snapshot\n"));
       assert.ok(history.includes(event.id));
       reconnect.abort();
+    },
+  );
+
+  await t.test(
+    "retains custom names by source and ID without merging sessions",
+    async () => {
+      const send = async (overrides: Record<string, unknown>) => {
+        const response = await post({ ...valid, ...overrides });
+        assert.equal(response.status, 201);
+        return (await response.json()) as HarborEvent;
+      };
+      const named = await send({ sessionName: "  Fix login  " });
+      assert.equal(named.sessionName, "Fix login");
+      assert.equal((await send({ type: "ready" })).sessionName, "Fix login");
+      assert.equal((await send({ sessionId: "two" })).sessionName, undefined);
+      assert.equal(
+        (await send({ source: "another-source" })).sessionName,
+        undefined,
+      );
+      // Identical display names still belong to separate IDs.
+      await send({ sessionId: "two", sessionName: "Fix login" });
+      await send({ sessionName: "Review login" });
+      assert.equal((await send({ type: "ready" })).sessionName, "Review login");
+      assert.equal((await send({ sessionId: "two" })).sessionName, "Fix login");
+
+      const controller = new AbortController();
+      const replay = await fetch(`${base}/api/stream`, {
+        signal: controller.signal,
+      });
+      const chunk = await replay.body!.getReader().read();
+      const history = JSON.parse(
+        new TextDecoder().decode(chunk.value).split("data: ")[1].trim(),
+      ) as HarborEvent[];
+      controller.abort();
+      assert.equal(history.at(-1)?.sessionName, "Fix login");
+      assert.equal(history.at(-2)?.sessionName, "Review login");
     },
   );
 });

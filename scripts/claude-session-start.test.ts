@@ -63,6 +63,7 @@ test(
       cwd: "/example/project",
       hook_event_name: "SessionStart",
       session_id: "hook-test-session",
+      session_title: "Harbor startup check",
       source: "startup",
       transcript_path: "/example/private-transcript.jsonl",
     };
@@ -106,6 +107,7 @@ test(
     assert.deepEqual(event, {
       message: "Claude Code session started.",
       sessionId: "hook-test-session",
+      sessionName: "Harbor startup check",
       source: "claude-code",
       type: "started",
     });

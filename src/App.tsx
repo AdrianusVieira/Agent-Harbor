@@ -1,14 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { EVENT_LIMIT, eventLabels, eventSymbols } from "./events.ts";
-import type { EventInput, HarborEvent } from "./events.ts";
+import type { HarborEvent } from "./events.ts";
 
 type Connection = "connecting" | "connected" | "disconnected";
-const exampleCommand = [
-  "curl -X POST http://127.0.0.1:5173/api/events \\",
-  "  -H 'Content-Type: application/json' \\",
-  `  -d '{"source":"manual","sessionId":"first-session","type":"waiting","message":"Ready for your input."}'`,
-].join("\n");
-
 function HarborMark({ large = false }: { large?: boolean }) {
   return (
     <svg
@@ -26,28 +20,13 @@ function HarborMark({ large = false }: { large?: boolean }) {
   );
 }
 
-async function sendEvent(input: EventInput) {
-  const response = await fetch("/api/events", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  if (!response.ok)
-    throw new Error(
-      "Could not send an event. Check that npm run dev is running.",
-    );
-}
-
 export function App() {
   const [connection, setConnection] = useState<Connection>("connecting");
-  const [copied, setCopied] = useState(false);
   const [events, setEvents] = useState<HarborEvent[]>([]);
   const [filter, setFilter] = useState<"all" | "attention">("all");
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
-  const [notice, setNotice] = useState("");
   const [pausedEvents, setPausedEvents] = useState<HarborEvent[] | null>(null);
   const [query, setQuery] = useState("");
-  const [sending, setSending] = useState(false);
 
   const followTail = useRef(true);
   const viewport = useRef<HTMLDivElement>(null);
@@ -68,13 +47,6 @@ export function App() {
     return () => stream.close();
   }, []);
 
-  useEffect(() => {
-    if (copied) {
-      const timeout = setTimeout(() => setCopied(false), 2000);
-      return () => clearTimeout(timeout);
-    }
-  }, [copied]);
-
   const displayed = (pausedEvents ?? events).filter(
     (event) => !hiddenIds.has(event.id),
   );
@@ -91,7 +63,7 @@ export function App() {
       (filter === "all" ||
         event.type === "waiting" ||
         event.type === "error") &&
-      `${event.source} ${event.sessionId} ${event.type} ${event.message}`
+      `${event.source} ${event.sessionId} ${event.sessionName ?? ""} ${event.type} ${event.message}`
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
@@ -106,60 +78,9 @@ export function App() {
     }
   }, [events, paused, query, filter]);
 
-  async function addSample() {
-    setSending(true);
-    setNotice("");
-    try {
-      const batch = Date.now().toString(36);
-      const sample: EventInput[] = [
-        {
-          source: "demo/claude-code",
-          sessionId: `sample-${batch}`,
-          type: "started",
-          message: "Sample session started. No agent is connected.",
-        },
-        {
-          source: "demo/claude-code",
-          sessionId: `sample-${batch}`,
-          type: "activity",
-          message: "Reviewing the project structure…",
-        },
-        {
-          source: "demo/claude-code",
-          sessionId: `sample-${batch}`,
-          type: "waiting",
-          message: "May I run the project checks?",
-        },
-        {
-          source: "demo/codex",
-          sessionId: `sample-${batch}`,
-          type: "ready",
-          message: "Your response is ready to review.",
-        },
-      ];
-      for (const event of sample) await sendEvent(event);
-      followTail.current = true;
-    } catch (error) {
-      setNotice((error as Error).message);
-    } finally {
-      setSending(false);
-    }
-  }
-
   function clearView() {
     setHiddenIds(new Set(events.map((event) => event.id)));
     if (paused) setPausedEvents([]);
-  }
-
-  async function copyCommand() {
-    try {
-      await navigator.clipboard.writeText(exampleCommand);
-      setCopied(true);
-    } catch {
-      setNotice(
-        "Copy is unavailable. Select the command below to copy it manually.",
-      );
-    }
   }
 
   return (
@@ -294,28 +215,14 @@ export function App() {
                   <>
                     <HarborMark large />
                     <p className="empty-title">The harbor is quiet.</p>
-                    <p>
-                      Incoming events will appear here.
-                      <br />
-                      Send your first signal, or try a sample stream.
-                    </p>
-                    <button
-                      className="sample-button"
-                      onClick={() => void addSample()}
-                      disabled={sending || connection !== "connected"}
-                    >
-                      {sending ? "Sending…" : "↗ Send sample events"}
-                    </button>
-                    <span className="empty-footnote">
-                      Sample data only. No agents connected yet.
-                    </span>
+                    <p>Incoming session events will appear here.</p>
                   </>
                 ) : (
                   <>
                     <p className="empty-title">No matching signals.</p>
                     <p>Try another search or switch to all events.</p>
                     <button
-                      className="sample-button"
+                      className="reset-button"
                       onClick={() => {
                         setFilter("all");
                         setQuery("");
@@ -344,7 +251,16 @@ export function App() {
                     <div className="event-content">
                       <div className="event-meta">
                         <span className="event-source">{event.source}</span>
-                        <span className="event-session">{event.sessionId}</span>
+                        <span
+                          className={
+                            event.sessionName
+                              ? "event-session named"
+                              : "event-session"
+                          }
+                          title={`Session ID: ${event.sessionId}`}
+                        >
+                          {event.sessionName ?? event.sessionId}
+                        </span>
                         <span className="event-label">
                           {eventLabels[event.type]}
                         </span>
@@ -389,49 +305,6 @@ export function App() {
             </span>
           </div>
         </section>
-
-        {notice && (
-          <p className="notice" role="alert">
-            {notice}
-          </p>
-        )}
-
-        <details className="send-guide">
-          <summary>
-            <span>
-              <span className="guide-symbol" aria-hidden="true">
-                ＋
-              </span>{" "}
-              Send an event
-            </span>
-            <span className="guide-caption">a small first step</span>
-          </summary>
-          <div className="guide-content">
-            <p>
-              Run this in your terminal while <code>npm run dev</code> is
-              running.
-            </p>
-            <div className="command-block">
-              <pre>
-                <code>{exampleCommand}</code>
-              </pre>
-              <button onClick={() => void copyCommand()}>
-                {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
-            <p className="guide-note">
-              Events stay in memory until the dev server restarts. Agent
-              integrations come next.
-            </p>
-            <button
-              className="text-button"
-              onClick={() => void addSample()}
-              disabled={sending || connection !== "connected"}
-            >
-              {sending ? "Sending…" : "Send another sample stream ↗"}
-            </button>
-          </div>
-        </details>
       </main>
 
       <footer className="app-footer">

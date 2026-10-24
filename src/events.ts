@@ -11,6 +11,7 @@ export type EventType = (typeof eventTypes)[number];
 export interface EventInput {
   source: string;
   sessionId: string;
+  sessionName?: string;
   type: EventType;
   message: string;
 }

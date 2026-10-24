@@ -4,7 +4,7 @@
 
 Agent Harbor is a personal learning project: a local monitor for AI work sessions across apps and editors, especially sessions waiting for the user's attention.
 
-The project-local Claude Code startup, permission-request, successful tool-result, and reply-ready hooks are verified with real sessions. On 2026-10-24, the user confirmed **needs input → working** and **started → reply ready**, supplying screenshots of both transitions. `Stop` emits `ready` when a response finishes, not when the overall task is proven complete. Failure and interruption mappings have automated coverage only. The observers do not detect the instant of approval, manual denial, or permission-dialog cancellation. Startup timing investigation is complete; see README.md. Keep the verified increment small and choose further work with the user. Automatic discovery, prompt-start detection, other integrations, notifications, and orchestration do not exist yet.
+The project-local Claude Code startup, permission-request, successful tool-result, and reply-ready hooks are verified with real sessions. On 2026-10-24, the user confirmed **needs input → working** and **started → reply ready**, supplying screenshots of both transitions. `Stop` emits `ready` when a response finishes, not when the overall task is proven complete. The `UserPromptSubmit` observer emits `activity` when a prompt is submitted. On 2026-10-24, the user also confirmed **reply ready → working → reply ready** for the same real session with a screenshot. Failure and interruption mappings have automated coverage only. The observers do not detect the instant of approval, manual denial, or permission-dialog cancellation. Startup timing investigation is complete; see README.md. Custom session names are forwarded from startup and prompt-submit hook payloads and retained by source and session ID within receiver history. On 2026-10-24, the user confirmed name display with a screenshot showing `#test1` and `#test2` on both working and reply-ready events. The screenshot does not expose the underlying IDs, so it does not independently establish whether these are two sessions or a rename. Keep the verified increment small and choose further work with the user. Automatic discovery, global hook installation, other integrations, notifications, and orchestration do not exist yet.
 
 Read [README.md](README.md) for setup, the event contract, and current limitations. Inspect the actual code before assuming a feature exists.
 
@@ -30,9 +30,11 @@ The temporary `Bash(npm run typecheck)` Ask rule was removed after the successfu
 
 ## Monitoring semantics
 
-- Clearly label sample data. Never present demo traffic as connected agents.
+- Keep the monitoring UI free of sample generators and manual event-sending controls. Start with an empty stream when the receiver has no history. Keep synthetic test traffic isolated from the user’s receiver.
 - Distinguish observed events from inferred session state. A quiet stream does not prove a session has stopped or is stuck.
 - A response being ready does not prove the overall task is complete.
+- Use the custom session name for display when available, and source plus session ID for identity. Names can change or repeat. Only forward explicit `session_title` metadata; do not derive names from prompt or transcript content.
+- Prompt monitoring forwards no prompt text and emits no context or blocking decision. A submitted prompt does not prove model processing has started; another hook may still block it.
 - Stop monitoring must emit no feedback, blocking decisions, or nonzero exit codes that could continue Claude. Do not forward response text, background-task data, or scheduled prompts.
 - Counts reflect received, retained history; do not present them as a complete inventory of running sessions.
 - Keep the development receiver bound to loopback. Do not capture screens, install hooks, or collect session content as an incidental part of UI work.
@@ -40,9 +42,11 @@ The temporary `Bash(npm run typecheck)` Ask rule was removed after the successfu
 
 ## Repository map
 
-- `.claude/settings.json`: project-local Claude Code permission-request, reply-ready, startup, and tool-result hooks.
+- `.claude/settings.json`: project-local Claude Code permission-request, prompt-submit, reply-ready, startup, and tool-result hooks.
 - `scripts/claude-permission-request.test.ts`: permission observer delivery, privacy, and failure tests.
 - `scripts/claude-permission-request.ts`: translates tool permission requests into Harbor `waiting` events.
+- `scripts/claude-prompt-submit.test.ts`: ready-to-activity sequence, prompt privacy, and non-blocking failure tests.
+- `scripts/claude-prompt-submit.ts`: reports submitted prompts as observed session activity.
 - `scripts/claude-reply-ready.test.ts`: activity-to-ready sequence, response privacy, and non-blocking failure tests.
 - `scripts/claude-reply-ready.ts`: reports the main agent's `Stop` event as a ready response.
 - `scripts/claude-session-start.ts`: reads Claude hook input and sends one Harbor event to localhost.

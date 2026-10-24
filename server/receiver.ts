@@ -28,9 +28,22 @@ export function parseEvent(value: unknown): EventInput {
   if (!eventTypes.includes(input.type as EventInput["type"])) {
     throw new Error(`type must be one of: ${eventTypes.join(", ")}.`);
   }
+  if (
+    input.sessionName !== undefined &&
+    (typeof input.sessionName !== "string" ||
+      !input.sessionName.trim() ||
+      input.sessionName.length > 200)
+  ) {
+    throw new Error(
+      "sessionName must be a non-empty string of at most 200 characters.",
+    );
+  }
   return {
     source: (input.source as string).trim(),
     sessionId: (input.sessionId as string).trim(),
+    ...(typeof input.sessionName === "string"
+      ? { sessionName: input.sessionName.trim() }
+      : {}),
     message: (input.message as string).trim(),
     type: input.type as EventInput["type"],
   };
@@ -100,10 +113,22 @@ export function createReceiver() {
         const input = parseEvent(
           JSON.parse(Buffer.concat(chunks).toString("utf8")),
         );
+        // Some Claude hooks omit the title; retain the latest observed name.
+        const sessionName =
+          input.sessionName ??
+          [...events]
+            .reverse()
+            .find(
+              (event) =>
+                event.source === input.source &&
+                event.sessionId === input.sessionId &&
+                event.sessionName,
+            )?.sessionName;
         const event: HarborEvent = {
           ...input,
           id: randomUUID(),
           receivedAt: new Date().toISOString(),
+          ...(sessionName ? { sessionName } : {}),
         };
         events.push(event);
         if (events.length > EVENT_LIMIT) events.shift();
