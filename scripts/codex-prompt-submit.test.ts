@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,10 +9,9 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createReceiver } from "../server/receiver.ts";
 import type { HarborEvent } from "../src/events.ts";
+import { createCodexHooks } from "./codex-hooks.ts";
 
-const settings = JSON.parse(
-  await readFile(new URL("../.codex/hooks.json", import.meta.url), "utf8"),
-);
+const settings = { hooks: createCodexHooks() };
 
 test(
   "Codex prompt submission replaces ready with activity without forwarding content or decisions",

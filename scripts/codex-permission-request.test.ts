@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,10 +9,9 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createReceiver } from "../server/receiver.ts";
 import type { HarborEvent } from "../src/events.ts";
+import { createCodexHooks } from "./codex-hooks.ts";
 
-const settings = JSON.parse(
-  await readFile(new URL("../.codex/hooks.json", import.meta.url), "utf8"),
-);
+const settings = { hooks: createCodexHooks() };
 
 test(
   "Codex permission requests report waiting and preserve privacy without approval decisions",
@@ -112,6 +111,7 @@ test(
     assert.equal(registration.hooks.length, 1);
     assert.equal(registration.hooks[0].async, true);
     assert.equal(registration.hooks[0].type, "command");
+    assert.ok(typeof registration.matcher === "string");
     for (const tool of ["Bash", "apply_patch", "mcp__example__read"]) {
       assert.match(tool, new RegExp(registration.matcher));
     }

@@ -9,11 +9,14 @@
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "dev": "vite --host 127.0.0.1 --strictPort",
+    "hooks:codex:install": "tsx scripts/configure-codex-hooks.ts install",
+    "hooks:codex:preview": "tsx scripts/configure-codex-hooks.ts install --dry-run",
+    "hooks:codex:uninstall": "tsx scripts/configure-codex-hooks.ts uninstall",
     "hooks:install": "tsx scripts/configure-claude-hooks.ts install",
     "hooks:preview": "tsx scripts/configure-claude-hooks.ts install --dry-run",
     "hooks:uninstall": "tsx scripts/configure-claude-hooks.ts uninstall",
     "preview": "vite preview --host 127.0.0.1 --strictPort",
-    "test": "tsx --test scripts/*.test.ts server/*.test.ts",
+    "test": "tsx --test --test-concurrency=2 scripts/*.test.ts server/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
