@@ -2,7 +2,7 @@
 
 A local monitor for your AI work sessions. Keep Claude Code and Codex events in one minimal, terminal-style interface, so you can see when a session requests attention or finishes a response.
 
-Agent Harbor is an early learning project built with React, TypeScript, and Vite. It currently uses lifecycle hooks to observe local sessions. Desktop notifications, automatic discovery of running sessions, and orchestration are future work.
+Agent Harbor is an early learning project built with React, TypeScript, and Vite. It uses lifecycle hooks for Claude Code and Codex, with an experimental cache observer for Claude Desktop. Desktop notifications, automatic discovery of running sessions, and orchestration are future work.
 
 ## What you can see
 
@@ -12,10 +12,11 @@ Agent Harbor is an early learning project built with React, TypeScript, and Vite
 - Pause/resume and Clear view controls.
 - The last 500 events, held in memory and replayed when the browser reconnects.
 
-| Integration | Session startup | Prompt submitted | Permission requested | Response finished |
-| ----------- | --------------- | ---------------- | -------------------- | ----------------- |
-| Claude Code | Yes             | Yes              | Yes                  | Yes               |
-| Codex       | —               | Yes              | Yes                  | Yes               |
+| Integration                   | Session startup | Prompt submitted | Permission requested | Response finished |
+| ----------------------------- | --------------- | ---------------- | -------------------- | ----------------- |
+| Claude Code                   | Yes             | Yes              | Yes                  | Yes               |
+| Codex                         | —               | Yes              | Yes                  | Yes               |
+| Claude Desktop (experimental) | —               | —                | —                    | Cache observation |
 
 Claude Code and Codex have user-level installers, so you can connect local sessions across projects without adding Harbor scripts to each repository. Codex delivery has been exercised in the CLI, VS Code extension, and desktop app. Hook availability depends on your installed client and version. The installers target macOS/POSIX shells; Windows setup is not supported yet.
 
@@ -61,6 +62,30 @@ This installs three background observers in `~/.codex/hooks.json`: `PermissionRe
 Open the Codex CLI and run `/hooks`. Review and trust the three Harbor commands from the **user-level** hook file. New or changed definitions require Codex's normal trust review before they can run; installation does not grant trust or change feature flags. Then open a fresh local session in your chosen client.
 
 See the [Codex hook reference](https://learn.chatgpt.com/docs/hooks) for hook availability, configuration, and trust controls.
+
+### Experimental Claude Desktop observer
+
+This is a separate, manually started prototype for macOS that reports completion from supported Claude Desktop cache records. These records use a generic `chat` classification; the observer cannot reliably distinguish Cowork tasks from ordinary chats. Events therefore use source **`claude-desktop`**.
+
+Keep `npm run dev` running. In a second terminal in the Harbor checkout:
+
+```sh
+npm run watch:claude-desktop
+```
+
+Wait for **baseline loaded**, then send a new prompt in Claude Desktop. A newly cached response whose active assistant message has `stop_reason: end_turn` can produce **reply ready**. Existing history is ignored at startup. Renaming or rereading the same completed response does not send another event. Press **Ctrl+C** in the watcher terminal to stop it; nothing is installed in Claude settings or registered to start automatically.
+
+The observer polls once per second, but delivery depends on when Desktop saves its cache. Live delivery has been verified for a named Desktop conversation, including a user-run minimized-window check. Coverage beyond those checks remains experimental. It does not observe prompt submission, processing, approval requests, or the instant a response becomes visible. To reject late-loaded history, it checks the message's `updated_at`, falling back to `created_at` when the update timestamp is absent. These dates do not establish completion; `end_turn` does. Starting the watcher after a response has begun can miss that response if its stored message timestamp predates the baseline.
+
+The default source is `~/Library/Application Support/Claude/IndexedDB/https_claude.ai_0.indexeddb.leveldb`. `CLAUDE_DESKTOP_CACHE_DIR` overrides the directory. `HARBOR_PORT` overrides the loopback destination as with the hook observers. For a baseline-only check that sends no events:
+
+```sh
+npm run watch:claude-desktop -- --once
+```
+
+Compatibility is intentionally limited to inline conversation records in numbered LevelDB `.log` files, Blink serialization version 21, and supported V8 15/16 values. The reader checks fragment checksums and tolerates incomplete tails without opening the database through LevelDB or modifying it. Compacted `.ldb` files, external/compressed blobs, and unsupported values are not decoded; a warning means coverage is incomplete. Limits are 8 MiB per log, 32 MiB total, and 32 logs. Missing/corrupt logs pause reading; a detected sequence reset or gap establishes a fresh baseline without replaying history. Intermediate responses can be missed between snapshots.
+
+**Privacy:** the cache contains conversation content. The observer decodes supported records in memory, extracts only IDs, saved names, and completion metadata, and sends the same minimal event fields as the other adapters. It does not save cache copies to disk or log/forward prompt/response text or tool arguments. It keeps only bounded completion identities in memory between scans. Receiver failures have a timeout and are not retried. The prototype uses no screenshots, Claude credentials, private network APIs, or changes to permissions.
 
 ### Check the connection
 
@@ -113,6 +138,7 @@ Sessions are identified by **source + session ID**, so matching names do not mer
 
 - **Claude Code:** forwards explicit custom `session_title` metadata from startup and prompt-submit hooks. Automatically generated titles are not included by this adapter.
 - **Codex:** reads the matching saved `thread_name` from `session_index.jsonl` under `CODEX_HOME` or `~/.codex`. This includes custom renames and may include generated names. The file is read-only and is an internal Codex format, so compatibility may change.
+- **Claude Desktop prototype:** reads the cached conversation's saved `tree.name`. It does not generate a name from message text.
 
 Missing name metadata never blocks event delivery. A newly created session may show its ID before a name is saved; Codex names are checked once per event without waiting or retrying. Subsequent events can carry the name, and the receiver retains known names within its buffered history. Historical rows keep their earlier labels.
 
@@ -124,7 +150,7 @@ Events go to the local loopback receiver. The observers emit no context or appro
 
 The receiver has **no authentication** and is intended for local development. Keep it bound to `127.0.0.1`; it is not a hosted monitoring service. Hook setup applies to local clients using the configured agent home, not remote sessions, cloud environments, or other machines.
 
-There is currently no persistence, background service, screen capture, Cowork integration, or desktop notification system.
+There is currently no persistence, installed background service, screen capture, dedicated Cowork hook integration, or desktop notification system. The experimental Desktop observer has the narrower coverage described above.
 
 ## Troubleshooting
 
