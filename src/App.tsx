@@ -1,19 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { EVENT_LIMIT, eventLabels, eventSymbols } from "./events.ts";
+import { EVENT_LIMIT, eventLabels, eventSymbols, platformNames, sessionKey } from "./events.ts";
 import type { HarborEvent } from "./events.ts";
+import { watchHarborStream } from "./harbor-stream.ts";
+import type { Connection } from "./harbor-stream.ts";
 import { WifiAccess } from "./WifiAccess.tsx";
-
-type Connection = "connecting" | "connected" | "disconnected";
-
-const platformNames: Record<string, string> = {
-  "claude-code": "Claude Code",
-  "claude-desktop": "Claude Desktop",
-  codex: "Codex",
-};
-
-function sessionKey(event: HarborEvent) {
-  return JSON.stringify([event.source, event.sessionId]);
-}
+import { NotificationSettings } from "./NotificationSettings.tsx";
+import { useNotifications } from "./useNotifications.ts";
 
 function readDismissedSessions(): Map<string, string> {
   try {
@@ -95,6 +87,8 @@ export function App() {
   const followTail = useRef(true);
   const homeButton = useRef<HTMLButtonElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
+  const notifications = useNotifications(enterTerminal);
+  const { onSnapshot, onEvent } = notifications;
 
   const paused = pausedEvents !== null;
 
@@ -110,18 +104,18 @@ export function App() {
   }, [dismissedSessions]);
 
   useEffect(() => {
-    const stream = new EventSource("/api/stream");
-    stream.onopen = () => setConnection("connected");
-    stream.onerror = () => setConnection("disconnected");
-    stream.addEventListener("snapshot", (message: MessageEvent<string>) => {
-      setEvents(JSON.parse(message.data) as HarborEvent[]);
+    return watchHarborStream({
+      connection: setConnection,
+      snapshot: (snapshot) => {
+        onSnapshot(snapshot);
+        setEvents(snapshot);
+      },
+      event: (event) => {
+        onEvent(event);
+        setEvents((previous) => [...previous, event].slice(-EVENT_LIMIT));
+      },
     });
-    stream.addEventListener("event", (message: MessageEvent<string>) => {
-      const event = JSON.parse(message.data) as HarborEvent;
-      setEvents((previous) => [...previous, event].slice(-EVENT_LIMIT));
-    });
-    return () => stream.close();
-  }, []);
+  }, [onSnapshot, onEvent]);
 
   const latestBySession = new Map<string, HarborEvent>();
   for (const event of events) {
@@ -259,6 +253,7 @@ export function App() {
         </section>
 
         <WifiAccess />
+        <NotificationSettings alerts={notifications} />
 
         {selectedSession === null ? (
           <>

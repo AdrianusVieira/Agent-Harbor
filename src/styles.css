@@ -171,6 +171,43 @@ h1 {
   align-items: center;
   padding: 18px 0 23px;
 }
+.notification-settings {
+  margin: 12px 0 22px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.notification-settings summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 18px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+}
+.notification-settings summary::-webkit-details-marker { display: none; }
+.notification-settings summary::after { content: "+"; color: var(--muted); font: 18px var(--mono); }
+.notification-settings[open] summary::after { content: "−"; }
+.notification-summary { margin-left: auto; color: var(--muted); font-size: 10px; }
+.notification-body { border-top: 1px solid var(--rule); padding: 16px 18px; }
+.notification-intro { margin: 0 0 20px; color: var(--sub); font-size: 12px; line-height: 1.6; }
+.notification-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 32px; }
+.notification-grid fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.notification-grid legend { margin-bottom: 8px; padding: 0; font: 10px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+.notification-check { display: flex; align-items: center; gap: 10px; min-height: 36px; font-size: 12px; cursor: pointer; line-height: 1.5; }
+.notification-check input { accent-color: var(--ready-signal); width: 16px; height: 16px; margin: 0; flex-shrink: 0; }
+.notification-help { margin: 8px 0 0; font-size: 11px; color: var(--muted); line-height: 1.6; }
+.notification-help a { text-decoration: underline; overflow-wrap: anywhere; }
+.notification-volume { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; max-width: 260px; font-size: 11px; color: var(--sub); }
+.notification-volume span { display: flex; justify-content: space-between; }
+.notification-volume input { width: 100%; accent-color: var(--ready-signal); margin: 0; min-height: 28px; }
+.notification-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.notification-buttons button { background: transparent; border: 1px solid var(--border); padding: 8px 10px; font-size: 11px; min-height: 36px; }
+.notification-feedback { margin: 12px 0 0; color: var(--sub); font-size: 11px; line-height: 1.6; }
+.notification-feedback:empty { display: none; }
 .wifi-access {
   display: flex;
   align-items: center;
@@ -740,6 +777,11 @@ h1 {
   }
 }
 @media (max-width: 760px) {
+  .notification-settings summary { flex-wrap: wrap; padding: 12px; }
+  .notification-summary { font-size: 10px; }
+  .notification-body { padding: 16px 12px; }
+  .notification-grid { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .notification-check, .notification-buttons button { min-height: 44px; }
   .wifi-access {
     align-items: stretch;
     flex-direction: column;
@@ -834,6 +876,7 @@ h1 {
   }
 }
 @media (max-width: 420px) {
+  .notification-summary { order: 3; flex-basis: 100%; margin-left: 0; }
   .wifi-address {
     flex-wrap: wrap;
     justify-content: flex-end;

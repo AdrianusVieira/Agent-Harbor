@@ -2,7 +2,7 @@
 
 A local monitor for your AI work sessions. Each observed session gets a boat in your harbor; open it to follow its terminal-style event history and see when it requests attention or finishes a response.
 
-Agent Harbor is an early learning project built with React, TypeScript, and Vite. It uses lifecycle hooks for Claude Code and Codex, with an experimental cache observer for Claude Desktop. Desktop notifications, automatic discovery of running sessions, and orchestration are future work.
+Agent Harbor is an early learning project built with React, TypeScript, and Vite. It uses lifecycle hooks for Claude Code and Codex, with an experimental cache observer for Claude Desktop. Browser alerts include optional sound, desktop notifications, and a tab indicator. Automatic discovery of running sessions and orchestration are future work.
 
 ## What you can see
 
@@ -14,6 +14,7 @@ Agent Harbor is an early learning project built with React, TypeScript, and Vite
 - Text search and an Attention filter for input requests and errors.
 - Pause/resume and Clear view controls.
 - The last 500 events, held in memory and replayed when the browser reconnects.
+- Notification settings for event types, sound/volume, desktop alerts, tab indicators, and background-only delivery.
 
 | Integration                   | Session startup | Prompt submitted | Permission requested | Structured question | Response finished |
 | ----------------------------- | --------------- | ---------------- | -------------------- | ------------------- | ----------------- |
@@ -36,23 +37,17 @@ npm ci
 npm run dev
 ```
 
-Open <http://127.0.0.1:5173>. Keep the development server running while monitoring sessions. The same server serves the UI and receives events; the stream starts empty until a connected agent sends something.
+Open <http://127.0.0.1:5173>. `npm run dev` starts one server for both the host computer and devices on the same trusted Wi-Fi. The same server serves the UI and receives events; all addresses share its event history. Keep it running while monitoring sessions. The stream starts empty until a connected agent sends something.
 
 ### View on a phone over Wi-Fi
 
-Stop the existing development server, then start Harbor with:
-
-```sh
-npm run dev:lan
-```
-
-Connect your phone to the same trusted Wi-Fi as the host computer. Open the `Network` URL printed by Vite, such as `http://192.168.1.20:5173`, in your phone's browser. The dashboard adapts to small screens and shares the host's live event history. Boat dismissals and view controls belong to each browser. Keep the host awake and Harbor running; restarting the server clears its in-memory history.
+With `npm run dev` already running, connect your phone to the same trusted Wi-Fi as the host computer. Open the `Network` URL printed at startup, such as `http://192.168.1.20:5173`, in your phone's browser. No second server or environment is needed. The dashboard adapts to small screens and shares the host's live event history. Boat dismissals and view controls belong to each browser. Keep the host awake and Harbor running; restarting the server clears its in-memory history. `npm run dev:lan` remains an alias for the same startup mode.
 
 The dashboard's **Open on another device** panel also shows the host's current private IPv4 URLs, with a Copy button. Addresses refresh every 30 seconds and when the page regains focus. It uses the server's listening port and network interfaces; it does not test whether another device can connect. Multiple local interfaces can produce multiple addresses. Loopback-only mode does not advertise a Wi-Fi URL.
 
-Both startup commands use port **5173** and stop with an error if it is occupied, rather than switching ports. The host's Wi-Fi IP address can change. If an old phone link stops working, open Harbor locally on the host computer to find the updated URL.
+All startup commands use port **5173** and check for an existing local listener before starting, in addition to Vite's strict-port setting. Stop the running server before switching modes; running a local-only and Wi-Fi instance together can split hook delivery and browser history on systems that allow overlapping network bindings. The host's Wi-Fi IP address can change. If an old phone link stops working, open Harbor locally on the host computer to find the updated URL.
 
-This command listens on all IPv4 interfaces. Devices that can reach that port can view session names and events without a login. Use it only on a trusted local network, without public port forwarding. Event submissions remain restricted to loopback connections, so existing local observers need no changes. Return to `npm run dev` for access from the host computer only. If the phone cannot connect, check the host firewall and whether the Wi-Fi isolates devices from one another.
+The default command listens on all IPv4 interfaces. Devices that can reach that port can view session names and events without a login. Use it only on a trusted local network, without public port forwarding. Event submissions remain restricted to loopback connections, so existing local observers need no changes. For access from the host computer only, stop the server and run `npm run dev:local`. If the phone cannot connect, check the host firewall and whether the Wi-Fi isolates devices from one another.
 
 ### Connect Claude Code
 
@@ -144,6 +139,8 @@ The home view groups received events by source and session ID, showing one boat 
 
 An orange dot marks a latest **needs input** or **error** event; a blue dot marks **reply ready**. Other statuses have no colored dot. Status text accompanies the colors. These are the latest observed signals, including when the receiver is offline; they are not proof of current processing or overall task completion.
 
+Returning to the tab, restoring the page, or reconnecting the network while Harbor is visible requests a fresh receiver snapshot. The connection indicator shows **Connecting…** until that snapshot arrives. This helps recover from stale browser connections after backgrounding; it cannot recover events the receiver never received or history lost when the server restarted.
+
 Claude Code and Codex boats gently sail when their latest signal is **working** and the receiver is connected. The boat and water settle when that status changes or the connection drops. Reduced-motion preferences disable the animation. Desktop/Cowork boats stay still because working detection is unsupported there.
 
 Use the **×** on a boat to clear it from the harbor. It stays hidden across reloads and reconnects until a new event arrives for that same source and session ID. Clearing a boat does not delete its history. The browser stores up to 500 dismissal markers (source/session IDs and last-event IDs) locally; if browser storage is unavailable, dismissal lasts only for the page visit. Clearing site data resets these markers.
@@ -177,15 +174,29 @@ Sessions are identified by **source + session ID**, so matching names do not mer
 
 Missing name metadata never blocks event delivery. A newly created session may show its ID before a name is saved; Codex names are checked once per event without waiting or retrying. Subsequent events can carry the name, and the receiver retains known names within its buffered history. Historical rows keep their earlier labels.
 
+### Notifications
+
+Open **Notification settings** below the Wi-Fi panel. Sound and desktop alerts start off; the tab indicator starts on. Choose **Needs input / error** and/or **Reply ready**. By default, sound and desktop alerts run only when that Harbor tab is in the background; turn off **Sound and desktop only in background** to receive them while viewing it too, including when keeping Harbor visible on a phone as a second screen. **Test sound** plays a preview regardless of the sound/background switches; its result explains whether live alerts are enabled or muted by those settings. Pausing the terminal does not pause alerts.
+
+- **Sound:** enable **Play a chime**, choose the volume, and use **Test sound**. Each chime has three spaced notes over about 0.9 seconds, rising for reply-ready and falling for attention. After opening or reloading a tab, browsers may require another click: the panel shows **Sound needs a click** with **Enable sound in this tab**. Live alerts try to resume a context you already activated; browser rejection or a stalled resume stays quiet and is reported. **Last live sound** explains foreground muting, disabled event types/volume, browser audio blocking, another tab's claim, or catch-up after reconnect. A link in Sound jumps to the background-only setting under Behavior. Sound is generated locally; no audio files or external service are used. Bursts are coalesced into one chime.
+- **Tab indicator:** new qualifying live events while you are away update the title, such as **(2) Agent Harbor**, and the favicon (orange for attention, blue for replies). The count is sessions with unseen alert events in that tab, not the harbor's total attention count. Returning to the tab clears it; later working/ended signals or reconnect snapshots can also resolve it. Browsers control whether they display favicons.
+- **Desktop notifications:** enable the checkbox to request browser permission, then use **Test desktop notification**. Clicking a session notification focuses Harbor and opens that source/session's log. The alert contains the platform and saved session name (or short ID), plus a fixed status; event message details are excluded. System notification permissions and Focus/Do Not Disturb still apply. A test confirms a display request, not a guarantee that the OS presented it.
+
+Desktop notifications require a supported browser in a secure context: use `http://127.0.0.1:5173` or `http://localhost:5173` on the host computer, or trusted HTTPS. Plain HTTP through a Wi-Fi IP does not qualify, even on the host; that address still supports in-page sound and tab indicators. Mobile desktop-notification support varies. Harbor does not currently include a service worker, HTTPS setup, Home Screen installation, or Web Push.
+
+Only new live status transitions alert. Startup/reconnect snapshots, duplicate IDs, and repeated same-status events in the same session stay quiet. Settings changes do not replay old events. Alert claims are coordinated between tabs at the same browser address with Web Locks and browser storage where available. Without those facilities, deduplication is best effort; use one Harbor tab to avoid repeated alerts. Different origins (for example `localhost` versus `127.0.0.1`), browser profiles, and devices are independent.
+
+Settings persist per browser origin and sync between its open tabs; audio activation is per tab. Up to 500 event-ID/channel claims are retained locally to reduce duplicate alerts, without saving event content. If storage is unavailable, settings and deduplication fall back to this page visit. These are page-driven alerts: Harbor must remain open and connected. Closing or suspending the page, stopping the host server, or losing delivery can prevent alerts; missed snapshots are not replayed as notifications. On phones, background audio or page execution can pause despite sound permission; use a visible Harbor page for testing foreground chimes. A boat updating on return alone does not prove background delivery. Existing observer coverage limits still apply.
+
 ## Privacy and limits
 
 The bundled observers send the source, session ID, optional session name, event type, and a fixed message. Permission messages also include the tool name. They do not forward prompt text, response text, raw tool arguments, tool output/error details, transcript content, model details, or working directories. Claude Code and Codex permission/return observers additionally send an opaque matching fingerprint to the loopback receiver, derived in memory without persisting the input. This fingerprint is not encryption or anonymization. It and the bounded pending-wait state stay out of the browser's event stream. Custom session names are displayed in Harbor, so their contents are part of the monitoring data.
 
 Events go to the local loopback receiver. The observers emit no context or approval decisions; delivery failures exit normally so an unavailable Harbor receiver does not block an agent. Events are not queued or retried while Harbor is offline.
 
-The receiver has **no authentication** and is intended for local development. The default `npm run dev` binds to `127.0.0.1`; `npm run dev:lan` explicitly enables viewing over a trusted local network as described above. Event submissions require a loopback connection in either mode. It is not a hosted monitoring service. Hook setup applies to local clients using the configured agent home, not remote sessions, cloud environments, or other machines.
+The receiver has **no authentication** and is intended for local development on a trusted network. The default `npm run dev` enables local and same-Wi-Fi viewing; `npm run dev:local` binds only to `127.0.0.1`. Event submissions require a loopback connection in either mode. It is not a hosted monitoring service. Hook setup applies to local clients using the configured agent home, not remote sessions, cloud environments, or other machines.
 
-There is currently no event persistence, installed background service, screen capture, dedicated Cowork hook integration, or desktop notification system. Only boat-dismissal markers persist in browser storage. The experimental Desktop observer has the narrower coverage described above.
+There is currently no event persistence, installed background service, screen capture, dedicated Cowork hook integration, or Web Push delivery. Boat-dismissal markers, notification preferences, and bounded event-ID/channel alert claims persist in browser storage. The experimental Desktop observer has the narrower coverage described above.
 
 ## Troubleshooting
 
@@ -198,6 +209,8 @@ There is currently no event persistence, installed background service, screen ca
 | IDs appear instead of names                     | Set a custom session name where supported and submit another prompt. Missing or late metadata falls back to the ID.                               |
 | Hooks fail after moving Harbor or updating Node | Run the installer again to refresh absolute paths.                                                                                                |
 | Static preview shows no live events             | `npm run preview` serves the production UI only. The receiver runs with `npm run dev`.                                                            |
+| Sound is enabled but silent                     | Click **Enable sound in this tab** or **Test sound**, raise the volume, and check the background-only setting and system audio. |
+| Desktop notifications unavailable or blocked    | Open Harbor through localhost on the host computer, enable browser permission, and check system notification settings. The HTTP Wi-Fi address cannot enable desktop alerts. |
 
 Observers default to port **5173**. `HARBOR_PORT`, when inherited by the agent process, overrides their destination port; it must match the development server. Setting it does not change Vite's listening port.
 

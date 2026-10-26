@@ -40,3 +40,13 @@ export const eventSymbols: Record<EventType, string> = {
 };
 
 export const EVENT_LIMIT = 500;
+
+export const platformNames: Record<string, string> = {
+  "claude-code": "Claude Code",
+  "claude-desktop": "Claude Desktop",
+  codex: "Codex",
+};
+
+export function sessionKey(event: Pick<HarborEvent, "source" | "sessionId">) {
+  return JSON.stringify([event.source, event.sessionId]);
+}
