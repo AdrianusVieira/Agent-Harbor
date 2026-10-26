@@ -7,6 +7,8 @@
   --sub: #bdc7d2;
   --muted: #92a0b0;
   --border: #2b3540;
+  --input-signal: #e6a065;
+  --ready-signal: #7eb8ec;
   --rule: #202932;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -78,6 +80,13 @@ button:not(:disabled):hover {
   gap: 12px;
   font-size: 17px;
   letter-spacing: -0.5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.brand:not(:disabled):hover {
+  background: transparent;
 }
 .brand-emblem {
   width: 43px;
@@ -122,6 +131,7 @@ h1 {
   font-weight: 400;
   letter-spacing: -1.1px;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 .intro {
   color: var(--muted);
@@ -178,6 +188,208 @@ h1 {
   margin-left: auto;
   font: 10px var(--mono);
   color: var(--muted);
+}
+.harbor {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.harbor-titlebar {
+  min-height: 52px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.logbook-button,
+.session-navigation button {
+  border: 0;
+  background: transparent;
+  padding: 7px 9px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.logbook-button span {
+  margin-left: 7px;
+}
+.harbor-legend {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 20px 28px 0;
+  color: var(--muted);
+  font: 10px var(--mono);
+}
+.harbor-legend > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.boat-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.boat-dot.ready {
+  background: var(--ready-signal);
+}
+.boat-dot.waiting {
+  background: var(--input-signal);
+}
+.boat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(205px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 24px 28px 32px;
+  list-style: none;
+  min-height: 318px;
+  align-content: start;
+  background-image: radial-gradient(var(--border) 0.5px, transparent 0.5px);
+  background-size: 20px 20px;
+  background-position: 8px 12px;
+}
+.boat-card {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+.boat-card:hover,
+.boat-card:focus-within {
+  border-color: #536171;
+  background: #141b23;
+}
+.boat-open {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 26px 18px 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: center;
+}
+.boat-open:not(:disabled):hover {
+  background: transparent;
+}
+.boat-open:focus-visible {
+  outline-offset: -4px;
+}
+.boat-illustration {
+  position: relative;
+  display: block;
+  width: 120px;
+  height: 104px;
+  margin-bottom: 17px;
+  color: var(--sub);
+}
+.boat-icon {
+  display: block;
+  width: 120px;
+  height: 104px;
+}
+.boat-sail {
+  fill: #bdc7d20a;
+}
+.boat-water {
+  stroke: #647283;
+}
+.boat-sailing .boat-vessel {
+  transform-origin: 60px 82px;
+  animation: harbor-sail 4.8s ease-in-out infinite;
+}
+.boat-sailing .boat-water {
+  animation: harbor-wake 3.2s ease-in-out infinite;
+}
+.boat-flag {
+  position: absolute;
+  top: 10px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 4px var(--surface);
+}
+.boat-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  min-height: 38px;
+  max-width: 100%;
+  font: 12px/1.6 var(--mono);
+  color: var(--text);
+}
+.boat-platform {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.boat-status {
+  margin-top: 14px;
+  color: var(--muted);
+  font: 9px var(--mono);
+}
+.boat-status > span {
+  margin: 0 4px;
+}
+.boat-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 19px;
+}
+.harbor-empty {
+  min-height: 330px;
+}
+.harbor-empty .boat-icon {
+  margin-bottom: 20px;
+  color: var(--muted);
+}
+.harbor-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 15px 20px;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font: 10px/1.7 var(--mono);
+}
+.harbor-caption > span:last-child {
+  white-space: nowrap;
+}
+.session-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 0 20px;
+  color: var(--muted);
+  font: 11px var(--mono);
+}
+.session-navigation button {
+  padding-left: 0;
+}
+.session-navigation button > span {
+  margin-right: 8px;
 }
 .terminal {
   border: 1px solid var(--border);
@@ -445,6 +657,26 @@ h1 {
     opacity: 0.2;
   }
 }
+@keyframes harbor-sail {
+  0%,
+  100% {
+    transform: translate(-1px, 0) rotate(-2deg);
+  }
+  50% {
+    transform: translate(2px, -2px) rotate(2deg);
+  }
+}
+@keyframes harbor-wake {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: translateX(2px);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-2px);
+  }
+}
 @media (min-width: 1600px) {
   .app-shell {
     padding-top: 20px;
@@ -473,6 +705,20 @@ h1 {
   }
   .summary-note {
     display: none;
+  }
+  .boat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 20px 16px;
+    gap: 12px;
+  }
+  .harbor-legend {
+    padding-left: 16px;
+    padding-right: 16px;
+    gap: 16px;
+  }
+  .harbor-caption {
+    flex-direction: column;
+    gap: 5px;
   }
   .terminal-viewport {
     height: 380px;
@@ -520,6 +766,27 @@ h1 {
   }
   .session-summary > div {
     font-size: 10px;
+  }
+  .boat-grid {
+    padding: 16px 10px;
+    gap: 8px;
+  }
+  .boat-open {
+    padding: 24px 8px 18px;
+  }
+  .boat-platform {
+    font-size: 10px;
+  }
+  .boat-status {
+    font-size: 8px;
+  }
+  .harbor-titlebar {
+    padding: 0 12px;
+  }
+  .harbor-legend {
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 9px;
   }
   .terminal-titlebar,
   .terminal-toolbar {

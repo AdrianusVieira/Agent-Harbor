@@ -1,13 +1,16 @@
 # Agent Harbor
 
-A local monitor for your AI work sessions. Keep Claude Code and Codex events in one minimal, terminal-style interface, so you can see when a session requests attention or finishes a response.
+A local monitor for your AI work sessions. Each observed session gets a boat in your harbor; open it to follow its terminal-style event history and see when it requests attention or finishes a response.
 
 Agent Harbor is an early learning project built with React, TypeScript, and Vite. It uses lifecycle hooks for Claude Code and Codex, with an experimental cache observer for Claude Desktop. Desktop notifications, automatic discovery of running sessions, and orchestration are future work.
 
 ## What you can see
 
-- A live event stream with session names, sources, timestamps, and status labels.
-- Counts based on each observed session's latest received event.
+- A harbor of session boats, labeled with saved session names and platforms.
+- Orange dots for input requests/errors and blue dots for ready responses, based on the latest received event.
+- Click a boat for its session history, or open **Event log** for the complete retained stream.
+- Clear individual boats until their next event arrives.
+- Counts based on the boats currently in view.
 - Text search and an Attention filter for input requests and errors.
 - Pause/resume and Clear view controls.
 - The last 500 events, held in memory and replayed when the browser reconnects.
@@ -57,9 +60,9 @@ npm run hooks:codex:preview
 npm run hooks:codex:install
 ```
 
-This installs three background observers in `~/.codex/hooks.json`: `PermissionRequest`, `Stop`, and `UserPromptSubmit`. If `CODEX_HOME` is set, setup uses `hooks.json` in that directory instead.
+This installs four background observers in `~/.codex/hooks.json`: `PermissionRequest`, `PostToolUse`, `Stop`, and `UserPromptSubmit`. If `CODEX_HOME` is set, setup uses `hooks.json` in that directory instead. `PostToolUse` only helps clear matching permission waits; ordinary tool returns do not add events to the log.
 
-Open the Codex CLI and run `/hooks`. Review and trust the three Harbor commands from the **user-level** hook file. New or changed definitions require Codex's normal trust review before they can run; installation does not grant trust or change feature flags. Then open a fresh local session in your chosen client.
+Open the Codex CLI and run `/hooks`. Review and trust the Harbor commands from the **user-level** hook file, including `PostToolUse` when upgrading an older installation. New or changed definitions require Codex's normal trust review before they can run; installation does not grant trust or change feature flags. Then open a fresh local session in your chosen client.
 
 See the [Codex hook reference](https://learn.chatgpt.com/docs/hooks) for hook availability, configuration, and trust controls.
 
@@ -77,7 +80,7 @@ Wait for **baseline loaded**, then send a new prompt in Claude Desktop. A newly 
 
 Structured questions are observed requests for input, not tool-permission gates or an explicit live “unanswered” flag. The observer does not interpret ordinary chat text as a question or detect the instant you select an answer. It can remain **needs input** until the following response finishes. Live **needs input → reply ready** delivery has been verified for a named conversation; Skip/cancel behavior remains unverified. If a later cache write adds a question to the same response, **needs input** takes priority and that response cannot switch back to ready; a new response is required.
 
-The observer polls once per second, but delivery depends on when Desktop saves its cache. Live delivery has been verified for a named Desktop conversation, including a user-run minimized-window check. Coverage beyond those checks remains experimental. It does not observe prompt submission, processing, approval requests, or the instant a response becomes visible. To reject late-loaded history, it checks the message's `updated_at`, falling back to `created_at` when the update timestamp is absent. These dates do not establish completion; `end_turn` does. Starting the watcher after a response has begun can miss that response if its stored message timestamp predates the baseline.
+The observer polls once per second, but delivery depends on when Desktop saves its cache. Live delivery has been verified for a named Desktop conversation, including a user-run minimized-window check. Coverage beyond those checks remains experimental. It does not observe prompt submission, processing, approval requests, or the instant a response becomes visible. A submitted prompt can appear in the supported cache only after its response finishes, so a newly cached human message is not a reliable live **working** signal. To reject late-loaded history, it checks the message's `updated_at`, falling back to `created_at` when the update timestamp is absent. These dates do not establish completion; `end_turn` does. Starting the watcher after a response has begun can miss that response if its stored message timestamp predates the baseline.
 
 The default source is `~/Library/Application Support/Claude/IndexedDB/https_claude.ai_0.indexeddb.leveldb`. `CLAUDE_DESKTOP_CACHE_DIR` overrides the directory. `HARBOR_PORT` overrides the loopback destination as with the hook observers. For a baseline-only check that sends no events:
 
@@ -119,20 +122,32 @@ Uninstall preserves unrelated settings and hooks. Backups stay beside the corres
 
 ## Reading the stream
 
-| Label           | What was observed                                                               |
-| --------------- | ------------------------------------------------------------------------------- |
-| **started**     | A Claude Code session started.                                                  |
-| **working**     | A prompt was submitted; another hook may still block processing.                |
-| **needs input** | An agent requested tool permission, or Desktop presented a structured question. |
-| **reply ready** | The agent finished its current response.                                        |
+The home view groups received events by source and session ID, showing one boat per session in alphabetical name order. Click a boat to open its terminal history, or choose **Event log** to browse all retained events. **Back to harbor** returns to the boats.
+
+An orange dot marks a latest **needs input** or **error** event; a blue dot marks **reply ready**. Other statuses have no colored dot. Status text accompanies the colors. These are the latest observed signals, including when the receiver is offline; they are not proof of current processing or overall task completion.
+
+Claude Code and Codex boats gently sail when their latest signal is **working** and the receiver is connected. The boat and water settle when that status changes or the connection drops. Reduced-motion preferences disable the animation. Desktop/Cowork boats stay still because working detection is unsupported there.
+
+Use the **×** on a boat to clear it from the harbor. It stays hidden across reloads and reconnects until a new event arrives for that same source and session ID. Clearing a boat does not delete its history. The browser stores up to 500 dismissal markers (source/session IDs and last-event IDs) locally; if browser storage is unavailable, dismissal lasts only for the page visit. Clearing site data resets these markers.
+
+| Label           | What was observed                                                                  |
+| --------------- | ---------------------------------------------------------------------------------- |
+| **started**     | A Claude Code session started.                                                     |
+| **working**     | A prompt was submitted, or a Codex tool returned after a matching permission wait. |
+| **needs input** | An agent requested tool permission, or Desktop presented a structured question.    |
+| **reply ready** | The agent finished its current response.                                           |
 
 **Reply ready means a response is available, not that the overall task is complete.** Individual tool successes and failures are intentionally excluded. The event contract also accepts `error` and `ended`, but the bundled observers do not currently emit them.
 
-A permission request can be handled by automatic review without a human prompt. Harbor does not detect the instant of approval, denial, or cancellation, so a session can remain **needs input** until its response finishes. Approval stays in the originating agent.
+A permission request can be handled by automatic review without a human prompt. Harbor does not detect the instant of approval, denial, or cancellation. For Codex, a matching tool return clears the observed permission wait; when no other tracked or ambiguous wait remains, Harbor emits **working** with “Codex continued after a permission request.” and removes the orange dot. **Reply ready** still comes only from response completion. Approval stays in the originating agent.
 
-The stream is a history of observations. A quiet session is not proof that it stopped or is stuck, and counts are not a complete inventory of running agents. Attention includes historical waiting/error events, even if a later event changed that session's status.
+Codex interactive question forms are not currently monitored. Asking the user a question is a separate interaction from requesting tool permission, so it may not produce a **needs input** event. A boat can therefore retain its earlier working signal while such a question is open.
 
-**Pause** freezes the displayed history while events continue to arrive, within the retained buffer. **Clear view** hides events in the current browser view; it does not delete receiver history. Reloading restores retained events. Restarting the development server clears them.
+Codex request/return matching uses an opaque SHA-256 fingerprint of session, turn, canonical tool name, and shared tool-input metadata. The receiver uses it privately; it does not appear in event history. Matching is best effort: missing metadata, identical overlapping calls, lost or out-of-order hook delivery, or a receiver restart can leave a wait unresolved until another lifecycle signal. A long-running approved command can keep the orange dot until it returns. There is no timeout-based clearing or per-tool completion/error feed. Claude Code and Desktop keep their existing waiting-to-ready behavior.
+
+The stream is a history of observations. A quiet session is not proof that it stopped or is stuck, and counts are not a complete inventory of running agents. The terminal's Attention filter includes historical waiting/error events, even if a later event changed that session's status. Boat dots and summary counts use each visible boat's latest event.
+
+**Pause** freezes the displayed terminal history while events continue to arrive, within the retained buffer. Its pending count covers the selected session, or all sessions in **Event log**. **Clear view** hides the current terminal's history in this page visit; it does not clear boats or delete receiver history. Reloading restores retained events. Restarting the development server clears the receiver's history.
 
 ### Session names
 
@@ -146,13 +161,13 @@ Missing name metadata never blocks event delivery. A newly created session may s
 
 ## Privacy and limits
 
-The bundled observers send the source, session ID, optional session name, event type, and a fixed message. Permission messages also include the tool name. They do not forward prompt text, response text, tool arguments, transcript content, model details, or working directories. Custom session names are displayed in Harbor, so their contents are part of the monitoring data.
+The bundled observers send the source, session ID, optional session name, event type, and a fixed message. Permission messages also include the tool name. They do not forward prompt text, response text, raw tool arguments, tool output, transcript content, model details, or working directories. Codex permission/return observers additionally send an opaque matching fingerprint to the loopback receiver, derived in memory without persisting the input. This fingerprint is not encryption or anonymization. It and the bounded pending-wait state stay out of the browser's event stream. Custom session names are displayed in Harbor, so their contents are part of the monitoring data.
 
 Events go to the local loopback receiver. The observers emit no context or approval decisions; delivery failures exit normally so an unavailable Harbor receiver does not block an agent. Events are not queued or retried while Harbor is offline.
 
 The receiver has **no authentication** and is intended for local development. Keep it bound to `127.0.0.1`; it is not a hosted monitoring service. Hook setup applies to local clients using the configured agent home, not remote sessions, cloud environments, or other machines.
 
-There is currently no persistence, installed background service, screen capture, dedicated Cowork hook integration, or desktop notification system. The experimental Desktop observer has the narrower coverage described above.
+There is currently no event persistence, installed background service, screen capture, dedicated Cowork hook integration, or desktop notification system. Only boat-dismissal markers persist in browser storage. The experimental Desktop observer has the narrower coverage described above.
 
 ## Troubleshooting
 
@@ -173,6 +188,8 @@ Observers default to port **5173**. `HARBOR_PORT`, when inherited by the agent p
 ```text
 agent hook → observer → POST /api/events → in-memory history → SSE → React UI
 ```
+
+Codex's `PostToolUse` observer instead posts minimal matching metadata to `/api/codex/tool-returned`. The receiver publishes an activity event only when a matching pending permission group clears; ordinary or unrelated returns produce no history entry.
 
 React and plain CSS provide the monochrome terminal interface. A small Node HTTP middleware in Vite validates events and streams them with Server-Sent Events. There is no database or state-management dependency.
 

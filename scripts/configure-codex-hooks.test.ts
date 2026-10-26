@@ -14,6 +14,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { codexApprovalKey } from "./codex-approval-key.ts";
 import {
   createCodexHooks,
   harborRoot,
@@ -29,6 +30,9 @@ test("Codex setup preserves other hooks and metadata, is repeatable, and uninsta
   const before = {
     description: "Existing user hooks",
     hooks: {
+      PostToolUse: [
+        { custom: "preserve-tool-hook", hooks: [keep], matcher: "Bash" },
+      ],
       Stop: [{ custom: "preserve", hooks: [keep], matcher: "" }],
     },
   };
@@ -55,6 +59,14 @@ test("Codex setup preserves other hooks and metadata, is repeatable, and uninsta
   } = JSON.parse(await readFile(path, "utf8"));
   assert.deepEqual(settings, updateCodexSettings(before, "install"));
   assert.deepEqual(settings.hooks.Stop[0], before.hooks.Stop[0]);
+  assert.deepEqual(settings.hooks.PostToolUse[0], before.hooks.PostToolUse[0]);
+  const legacy = structuredClone(settings);
+  legacy.hooks.PostToolUse = structuredClone(before.hooks.PostToolUse);
+  assert.deepEqual(
+    updateCodexSettings(legacy, "install"),
+    settings,
+    "Upgrading three Harbor hooks adds the return observer while preserving unrelated tool hooks.",
+  );
   const files = await readdir(directory);
   assert.equal((await configureCodexHooks(path, "install")).changed, false);
   assert.deepEqual(await readdir(directory), files);
@@ -200,7 +212,9 @@ test(
         JSON.stringify({
           hook_event_name: event,
           session_id: "foreign-session",
+          tool_input: { command: "foreign-command" },
           tool_name: "Bash",
+          turn_id: "foreign-turn",
         }),
       );
       assert.equal((await once(child, "close"))[0], 0, stderr);
@@ -218,14 +232,22 @@ test(
       assert.ok(!handler.command.includes("git rev-parse"));
       await run(handler.command, event);
     }
+    const approvalKey = codexApprovalKey({
+      session_id: "foreign-session",
+      tool_input: { command: "foreign-command" },
+      tool_name: "Bash",
+      turn_id: "foreign-turn",
+    });
     assert.deepEqual(received, [
       {
+        approvalKey,
         message: "Codex requested permission to use Bash.",
         sessionId: "foreign-session",
         sessionName: "Other project",
         source: "codex",
         type: "waiting",
       },
+      { approvalKey, sessionId: "foreign-session" },
       {
         message: "Codex finished its response.",
         sessionId: "foreign-session",
@@ -249,6 +271,6 @@ test(
       createCodexHooks(linkedRoot, linkedNode).Stop[0].hooks[0].command,
       "Stop",
     );
-    assert.equal(received.length, 4);
+    assert.equal(received.length, 5);
   },
 );

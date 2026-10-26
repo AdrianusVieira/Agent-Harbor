@@ -1,4 +1,5 @@
 import type { EventInput } from "../src/events.ts";
+import { codexApprovalKey } from "./codex-approval-key.ts";
 import { readCodexSessionName } from "./codex-session-name.ts";
 
 // Observe the request without returning an approval decision to Codex.
@@ -46,7 +47,10 @@ try {
       type: "waiting",
     };
     const response = await fetch(`http://127.0.0.1:${port}/api/events`, {
-      body: JSON.stringify(event),
+      body: JSON.stringify({
+        ...event,
+        approvalKey: codexApprovalKey(input as Record<string, unknown>),
+      }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
       redirect: "error",

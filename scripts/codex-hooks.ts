@@ -5,6 +5,7 @@ export const harborRoot = fileURLToPath(new URL("../", import.meta.url));
 const marker = " # agent-harbor";
 const scripts = {
   PermissionRequest: "codex-permission-request.ts",
+  PostToolUse: "codex-tool-returned.ts",
   Stop: "codex-reply-ready.ts",
   UserPromptSubmit: "codex-prompt-submit.ts",
 } as const;
@@ -41,7 +42,9 @@ export function createCodexHooks(root = harborRoot, node = process.execPath) {
               type: "command",
             },
           ],
-          ...(event === "PermissionRequest" ? { matcher: ".*" } : {}),
+          ...(event === "PermissionRequest" || event === "PostToolUse"
+            ? { matcher: ".*" }
+            : {}),
         },
       ],
     ]),

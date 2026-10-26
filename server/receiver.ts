@@ -59,12 +59,49 @@ function json(res: ServerResponse, status: number, value: unknown) {
 
 // Development-only receiver. The browser reconnects with a full bounded snapshot.
 export function createReceiver() {
-  const events: HarborEvent[] = [];
   const clients = new Set<ServerResponse>();
+  const events: HarborEvent[] = [];
+  const pendingApprovals = new Map<
+    string,
+    { keys: Set<string>; untracked: boolean }
+  >();
+
+  function appendEvent(input: EventInput) {
+    const sessionName =
+      input.sessionName ??
+      [...events]
+        .reverse()
+        .find(
+          (event) =>
+            event.source === input.source &&
+            event.sessionId === input.sessionId &&
+            event.sessionName,
+        )?.sessionName;
+    const event: HarborEvent = {
+      ...input,
+      id: randomUUID(),
+      receivedAt: new Date().toISOString(),
+      ...(sessionName ? { sessionName } : {}),
+    };
+    events.push(event);
+    if (events.length > EVENT_LIMIT) events.shift();
+    for (const client of clients)
+      client.write(`event: event\ndata: ${JSON.stringify(event)}\n\n`);
+    return event;
+  }
+
+  function approvalKey(value: unknown): value is string {
+    return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+  }
 
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const path = req.url?.split("?")[0];
-    if (path !== "/api/events" && path !== "/api/stream") return false;
+    if (
+      path !== "/api/events" &&
+      path !== "/api/stream" &&
+      path !== "/api/codex/tool-returned"
+    )
+      return false;
 
     // Keep browser requests same-origin; command-line senders have no Origin header.
     if (
@@ -92,7 +129,7 @@ export function createReceiver() {
       return true;
     }
 
-    if (path === "/api/events" && req.method === "POST") {
+    if (path !== "/api/stream" && req.method === "POST") {
       if (
         req.headers["content-type"]?.split(";")[0].trim() !== "application/json"
       ) {
@@ -110,31 +147,66 @@ export function createReceiver() {
           }
           chunks.push(Buffer.from(chunk));
         }
-        const input = parseEvent(
-          JSON.parse(Buffer.concat(chunks).toString("utf8")),
+        const value: unknown = JSON.parse(
+          Buffer.concat(chunks).toString("utf8"),
         );
-        // Some Claude hooks omit the title; retain the latest observed name.
-        const sessionName =
-          input.sessionName ??
-          [...events]
-            .reverse()
-            .find(
-              (event) =>
-                event.source === input.source &&
-                event.sessionId === input.sessionId &&
-                event.sessionName,
-            )?.sessionName;
-        const event: HarborEvent = {
-          ...input,
-          id: randomUUID(),
-          receivedAt: new Date().toISOString(),
-          ...(sessionName ? { sessionName } : {}),
-        };
-        events.push(event);
-        if (events.length > EVENT_LIMIT) events.shift();
-        for (const client of clients)
-          client.write(`event: event\ndata: ${JSON.stringify(event)}\n\n`);
-        json(res, 201, event);
+        if (path === "/api/codex/tool-returned") {
+          if (!value || typeof value !== "object" || Array.isArray(value))
+            throw new Error("Expected a JSON object.");
+          const { approvalKey: key, sessionId } = value as Record<
+            string,
+            unknown
+          >;
+          if (
+            !approvalKey(key) ||
+            typeof sessionId !== "string" ||
+            !sessionId.trim() ||
+            sessionId.length > 120
+          )
+            throw new Error("Invalid Codex tool-return metadata.");
+          const id = sessionId.trim();
+          const pending = pendingApprovals.get(id);
+          // Unrelated or late tool returns never overwrite ready/new activity.
+          if (
+            pending?.keys.delete(key) &&
+            !pending.keys.size &&
+            !pending.untracked
+          ) {
+            pendingApprovals.delete(id);
+            appendEvent({
+              message: "Codex continued after a permission request.",
+              sessionId: id,
+              source: "codex",
+              type: "activity",
+            });
+          }
+          res.writeHead(204);
+          res.end();
+        } else {
+          const input = parseEvent(value);
+          if (input.source === "codex") {
+            if (input.type === "waiting") {
+              const pending = pendingApprovals.get(input.sessionId) ?? {
+                keys: new Set<string>(),
+                untracked: false,
+              };
+              const key = (value as Record<string, unknown>).approvalKey;
+              if (
+                !approvalKey(key) ||
+                pending.keys.has(key) ||
+                pending.keys.size >= EVENT_LIMIT
+              ) {
+                // Missing metadata or identical concurrent calls are ambiguous.
+                // Keep waiting until the next lifecycle signal in that case.
+                pending.untracked = true;
+              } else pending.keys.add(key);
+              pendingApprovals.set(input.sessionId, pending);
+              if (pendingApprovals.size > EVENT_LIMIT)
+                pendingApprovals.delete(pendingApprovals.keys().next().value!);
+            } else pendingApprovals.delete(input.sessionId);
+          }
+          json(res, 201, appendEvent(input));
+        }
       } catch (error) {
         json(res, 400, {
           error:
@@ -154,6 +226,7 @@ export function createReceiver() {
   function close() {
     for (const client of clients) client.end();
     clients.clear();
+    pendingApprovals.clear();
   }
   return { handle, close };
 }

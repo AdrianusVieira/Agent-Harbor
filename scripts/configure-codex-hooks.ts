@@ -43,6 +43,7 @@ export async function configureCodexHooks(
         "codex-permission-request.ts",
         "codex-prompt-submit.ts",
         "codex-reply-ready.ts",
+        "codex-tool-returned.ts",
       ].map((name) => `scripts/${name}`),
     ])
       await access(join(harborRoot, file));

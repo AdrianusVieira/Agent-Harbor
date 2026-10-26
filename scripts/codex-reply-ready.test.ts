@@ -88,6 +88,7 @@ test(
 
     assert.deepEqual(Object.keys(settings.hooks), [
       "PermissionRequest",
+      "PostToolUse",
       "Stop",
       "UserPromptSubmit",
     ]);
