@@ -37,7 +37,7 @@ npm ci
 npm run dev
 ```
 
-Open <http://127.0.0.1:5173>. `npm run dev` starts one server for both the host computer and devices on the same trusted Wi-Fi. The same server serves the UI and receives events; all addresses share its event history. Keep it running while monitoring sessions. The stream starts empty until a connected agent sends something.
+Open <http://127.0.0.1:5173>. `npm run dev` starts one server for both the host computer and devices on the same trusted Wi-Fi. On macOS it also starts the experimental Claude Desktop observer; Ctrl+C stops both. The same server serves the UI and receives events; all addresses share its event history. Keep it running while monitoring sessions. The stream starts empty until a connected agent sends something.
 
 ### View on a phone over Wi-Fi
 
@@ -81,25 +81,23 @@ See the [Codex hook reference](https://learn.chatgpt.com/docs/hooks) for hook av
 
 ### Experimental Claude Desktop observer
 
-This is a separate, manually started prototype for macOS that reports structured input requests and response completion from supported Claude Desktop cache records. These records use a generic `chat` classification; the observer cannot reliably distinguish Cowork tasks from ordinary chats. Events therefore use source **`claude-desktop`**.
+This experimental macOS observer reports structured input requests and response completion from supported Claude Desktop cache records. These records use a generic `chat` classification; the observer cannot reliably distinguish Cowork tasks from ordinary chats. Events therefore use source **`claude-desktop`**.
 
-Keep `npm run dev` running. In a second terminal in the Harbor checkout:
+On macOS, `npm run dev`, `npm run dev:lan`, and `npm run dev:local` start the observer automatically after the receiver begins listening. It runs inside Harbor's process and stops when Harbor closes; configuration restarts stop the previous observer before starting a new one. No second terminal is needed. Other operating systems run the dashboard without this macOS observer. If the cache is missing or unsupported, Harbor stays available and the observer reports a warning and retries.
 
-```sh
-npm run watch:claude-desktop
-```
-
-Wait for **baseline loaded**, then send a new prompt in Claude Desktop. A newly cached response whose active assistant message has `stop_reason: end_turn` can produce **reply ready**. If that active reply contains a successful `ask_user_input_v0` call, it produces **needs input** with the fixed message “Claude Desktop asked for input.” instead. A later completed reply without another structured question produces **reply ready**. Old questions in earlier messages are ignored. Existing history is ignored at startup, and renaming or rereading a response does not send another event. Press **Ctrl+C** in the watcher terminal to stop it; nothing is installed in Claude settings or registered to start automatically.
+Wait for **baseline loaded** in Harbor's terminal, then send a new prompt in Claude Desktop. A newly cached response whose active assistant message has `stop_reason: end_turn` can produce **reply ready**. If that active reply contains a successful `ask_user_input_v0` call, it produces **needs input** with the fixed message “Claude Desktop asked for input.” instead. A later completed reply without another structured question produces **reply ready**. Old questions in earlier messages are ignored. Existing history is ignored at startup, and renaming or rereading a response does not send another event. Press **Ctrl+C** in Harbor's terminal to stop the server and observer together; nothing is installed in Claude settings or registered to start at login.
 
 Structured questions are observed requests for input, not tool-permission gates or an explicit live “unanswered” flag. The observer does not interpret ordinary chat text as a question or detect the instant you select an answer. It can remain **needs input** until the following response finishes. Live **needs input → reply ready** delivery has been verified for a named conversation; Skip/cancel behavior remains unverified. If a later cache write adds a question to the same response, **needs input** takes priority and that response cannot switch back to ready; a new response is required.
 
 The observer polls once per second, but delivery depends on when Desktop saves its cache. Live delivery has been verified for a named Desktop conversation, including a user-run minimized-window check. Coverage beyond those checks remains experimental. It does not observe prompt submission, processing, approval requests, or the instant a response becomes visible. A submitted prompt can appear in the supported cache only after its response finishes, so a newly cached human message is not a reliable live **working** signal. To reject late-loaded history, it checks the message's `updated_at`, falling back to `created_at` when the update timestamp is absent. These dates do not establish completion; `end_turn` does. Starting the watcher after a response has begun can miss that response if its stored message timestamp predates the baseline.
 
-The default source is `~/Library/Application Support/Claude/IndexedDB/https_claude.ai_0.indexeddb.leveldb`. `CLAUDE_DESKTOP_CACHE_DIR` overrides the directory. `HARBOR_PORT` overrides the loopback destination as with the hook observers. For a baseline-only check that sends no events:
+The default source is `~/Library/Application Support/Claude/IndexedDB/https_claude.ai_0.indexeddb.leveldb`. `CLAUDE_DESKTOP_CACHE_DIR` overrides the directory. Account switching and other account/profile cache layouts are not verified. Harbor's integrated observer always uses its own listening port. For a baseline-only check that sends no events:
 
 ```sh
 npm run watch:claude-desktop -- --once
 ```
+
+The standalone `npm run watch:claude-desktop` command remains available for diagnostics against a separately managed receiver, with `HARBOR_PORT` overriding its destination. Do not run it alongside Harbor's integrated observer for the same cache; both could send the same events.
 
 Compatibility is intentionally limited to inline conversation records in numbered LevelDB `.log` files, Blink serialization version 21, and supported V8 15/16 values. The reader checks fragment checksums and tolerates incomplete tails without opening the database through LevelDB or modifying it. Compacted `.ldb` files, external/compressed blobs, and unsupported values are not decoded; a warning means coverage is incomplete. Limits are 8 MiB per log, 32 MiB total, and 32 logs. Missing/corrupt logs pause reading; a detected sequence reset or gap establishes a fresh baseline without replaying history. Intermediate responses can be missed between snapshots.
 

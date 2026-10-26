@@ -1,11 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { claudeDesktopObserver } from "./scripts/claude-desktop-plugin.ts";
 import { localNetworkUrls } from "./server/network-urls.ts";
 import { createReceiver } from "./server/receiver.ts";
 
 export default defineConfig({
   plugins: [
     react(),
+    claudeDesktopObserver(),
     {
       name: "harbor-local-receiver",
       configureServer(server) {

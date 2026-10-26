@@ -16,8 +16,10 @@ export function createDesktopWatcher(
   const seen = new Map<string, "ready" | "waiting">();
 
   // Call serially: a slow receiver must not cause overlapping cache scans.
-  return async function poll() {
+  return async function poll(signal?: AbortSignal) {
+    signal?.throwIfAborted();
     const snapshot = await readDesktopSnapshot(directory);
+    signal?.throwIfAborted();
     const baseline =
       lastSequence === undefined ||
       snapshot.lastSequence < lastSequence ||
@@ -30,6 +32,7 @@ export function createDesktopWatcher(
     let failed = 0;
 
     for (const item of snapshot.observations) {
+      if (signal?.aborted) break;
       const key = `${item.event.sessionId}:${item.messageId}`;
       const previousType = seen.get(key);
       // A later cache write may add a question to the same response. Waiting
@@ -51,14 +54,16 @@ export function createDesktopWatcher(
           headers: { "Content-Type": "application/json" },
           method: "POST",
           redirect: "error",
-          signal: AbortSignal.timeout(1500),
+          signal: signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(1500)])
+            : AbortSignal.timeout(1500),
         });
         await response.body?.cancel();
         if (!response.ok) throw new Error("Receiver rejected the event.");
         delivered++;
       } catch {
         // Best effort, no retry queue or duplicate submission on the next scan.
-        failed++;
+        if (!signal?.aborted) failed++;
       }
     }
     return {
@@ -72,10 +77,8 @@ export function createDesktopWatcher(
   };
 }
 
-async function main() {
-  if (process.argv.slice(2).some((arg) => arg !== "--once"))
-    throw new Error("Unsupported watcher argument.");
-  const directory =
+export function desktopCacheDirectory() {
+  return (
     process.env.CLAUDE_DESKTOP_CACHE_DIR ||
     join(
       homedir(),
@@ -84,17 +87,26 @@ async function main() {
       "Claude",
       "IndexedDB",
       "https_claude.ai_0.indexeddb.leveldb",
-    );
-  const poll = createDesktopWatcher(
-    directory,
-    Number(process.env.HARBOR_PORT ?? "5173"),
+    )
   );
-  const once = process.argv.includes("--once");
-  const controller = new AbortController();
-  const stop = () => controller.abort();
-  process.once("SIGINT", stop);
-  process.once("SIGTERM", stop);
-  console.log(
+}
+
+export async function runDesktopWatcher({
+  directory = desktopCacheDirectory(),
+  logger = console,
+  once = false,
+  port,
+  signal,
+}: {
+  directory?: string;
+  logger?: Pick<Console, "error" | "log">;
+  once?: boolean;
+  port: number;
+  signal: AbortSignal;
+}) {
+  if (signal.aborted) return;
+  const poll = createDesktopWatcher(directory, port);
+  logger.log(
     "Agent Harbor: experimental Claude Desktop watcher. Existing history is ignored.",
   );
   let unavailable = false;
@@ -102,43 +114,60 @@ async function main() {
   try {
     do {
       try {
-        const result = await poll();
+        const result = await poll(signal);
+        if (signal.aborted) break;
         if (result.baseline)
-          console.log(
+          logger.log(
             `Agent Harbor: baseline loaded (${result.observed} cached response observations). Waiting for new responses.`,
           );
         if (result.reset)
-          console.error(
+          logger.error(
             "Agent Harbor: cache sequence changed; established a new baseline without replaying history.",
           );
         if (result.skipped && !skipped)
-          console.error(
+          logger.error(
             "Agent Harbor: unsupported cache records skipped. Coverage is incomplete.",
           );
         if (result.failed)
-          console.error(
+          logger.error(
             "Agent Harbor: Desktop event delivery failed. Check the local dev server. Events are not retried.",
           );
         if (result.delivered)
-          console.log(
+          logger.log(
             `Agent Harbor: delivered ${result.delivered} Desktop event(s).`,
           );
-        if (unavailable) console.log("Agent Harbor: cache reading resumed.");
+        if (unavailable) logger.log("Agent Harbor: cache reading resumed.");
         skipped = result.skipped > 0;
         unavailable = false;
       } catch {
+        if (signal.aborted) break;
         if (once) throw new Error("Cache read failed.");
         if (!unavailable)
-          console.error(
+          logger.error(
             "Agent Harbor: cache unavailable, corrupt, or unsupported. Monitoring paused; retrying.",
           );
         unavailable = true;
       }
-      if (!once)
-        await setTimeout(1000, undefined, { signal: controller.signal });
-    } while (!once && !controller.signal.aborted);
+      if (!once) await setTimeout(1000, undefined, { signal });
+    } while (!once && !signal.aborted);
   } catch (error) {
-    if (!controller.signal.aborted) throw error;
+    if (!signal.aborted) throw error;
+  }
+}
+
+async function main() {
+  if (process.argv.slice(2).some((arg) => arg !== "--once"))
+    throw new Error("Unsupported watcher argument.");
+  const controller = new AbortController();
+  const stop = () => controller.abort();
+  process.once("SIGINT", stop);
+  process.once("SIGTERM", stop);
+  try {
+    await runDesktopWatcher({
+      once: process.argv.includes("--once"),
+      port: Number(process.env.HARBOR_PORT ?? "5173"),
+      signal: controller.signal,
+    });
   } finally {
     process.removeListener("SIGINT", stop);
     process.removeListener("SIGTERM", stop);

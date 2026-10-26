@@ -14,8 +14,10 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { serialize } from "node:v8";
+import { createLogger, createServer as createViteServer } from "vite";
 import { createReceiver } from "../server/receiver.ts";
 import type { HarborEvent } from "../src/events.ts";
 import {
@@ -23,7 +25,11 @@ import {
   readCacheWrites,
   readDesktopSnapshot,
 } from "./claude-desktop-cache.ts";
-import { createDesktopWatcher } from "./watch-claude-desktop.ts";
+import { claudeDesktopObserver } from "./claude-desktop-plugin.ts";
+import {
+  createDesktopWatcher,
+  runDesktopWatcher,
+} from "./watch-claude-desktop.ts";
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const LEAF = "22222222-2222-4222-8222-222222222222";
@@ -694,3 +700,171 @@ test("Desktop watcher CLI --once baselines an isolated cache without posting or 
     ID,
   );
 });
+
+async function waitFor(check: () => boolean) {
+  const deadline = Date.now() + 8000;
+  while (!check()) {
+    assert.ok(
+      Date.now() < deadline,
+      "Timed out waiting for watcher lifecycle.",
+    );
+    await delay(25);
+  }
+}
+
+test(
+  "Harbor starts one Desktop observer after listening, restarts it with the server, and stops polling on close",
+  {
+    skip: process.platform !== "darwin",
+    timeout: 30_000,
+  },
+  async (t) => {
+    const directory = await mkdtemp(
+      join(tmpdir(), "harbor-desktop-lifecycle-"),
+    );
+    const previousDirectory = process.env.CLAUDE_DESKTOP_CACHE_DIR;
+    const previousPort = process.env.HARBOR_PORT;
+    process.env.CLAUDE_DESKTOP_CACHE_DIR = directory;
+    process.env.HARBOR_PORT = "1";
+    t.after(async () => {
+      if (previousDirectory === undefined)
+        delete process.env.CLAUDE_DESKTOP_CACHE_DIR;
+      else process.env.CLAUDE_DESKTOP_CACHE_DIR = previousDirectory;
+      if (previousPort === undefined) delete process.env.HARBOR_PORT;
+      else process.env.HARBOR_PORT = previousPort;
+      await rm(directory, { force: true, recursive: true });
+    });
+    const file = join(directory, "000001.log");
+    const batches = [batch(1, [{ value: value(tree()) }])];
+    await writeFile(file, log(batches));
+    const messages: string[] = [];
+    const received: unknown[] = [];
+    const logger = createLogger("silent");
+    logger.error =
+      logger.info =
+      logger.warn =
+        (message) => {
+          messages.push(message);
+        };
+    const server = await createViteServer({
+      configFile: false,
+      customLogger: logger,
+      plugins: [
+        claudeDesktopObserver(),
+        {
+          name: "isolated-observer-receiver",
+          configureServer(server) {
+            server.middlewares.use((req, res) => {
+              if (req.method !== "POST" || req.url !== "/api/events") {
+                res.writeHead(404).end();
+                return;
+              }
+              let body = "";
+              req.on("data", (chunk) => {
+                body += chunk;
+              });
+              req.on("end", () => {
+                received.push(JSON.parse(body));
+                res.writeHead(201).end();
+              });
+            });
+          },
+        },
+      ],
+      root: directory,
+      server: { host: "127.0.0.1", port: 0, strictPort: true },
+    });
+    t.after(() => server.close());
+    assert.equal(
+      messages.length,
+      0,
+      "Creating a server must not start the watcher before listen.",
+    );
+    await server.listen();
+    await waitFor(() =>
+      messages.some((message) => message.includes("baseline loaded")),
+    );
+    assert.equal(received.length, 0, "Startup history stays silent.");
+    batches.push(
+      batch(2, [
+        { value: value(tree(NEXT, "Lifecycle check", Date.now() + 1)) },
+      ]),
+    );
+    await writeFile(file, log(batches));
+    await waitFor(() => received.length === 1);
+    assert.deepEqual(received[0], {
+      message: "Claude Desktop finished its response.",
+      sessionId: ID,
+      sessionName: "Lifecycle check",
+      source: "claude-desktop",
+      type: "ready",
+    });
+    await server.restart();
+    await waitFor(
+      () =>
+        messages.filter((message) => message.includes("baseline loaded"))
+          .length === 2,
+    );
+    assert.equal(received.length, 1, "Restart must not replay cached replies.");
+    batches.push(
+      batch(3, [
+        {
+          value: value(
+            tree(
+              "44444444-4444-4444-8444-444444444444",
+              "Lifecycle check",
+              Date.now() + 1,
+            ),
+          ),
+        },
+      ]),
+    );
+    await writeFile(file, log(batches));
+    await waitFor(() => received.length === 2);
+    await server.close();
+    const messagesAtClose = messages.length;
+    await rm(file);
+    await delay(1250);
+    assert.equal(
+      messages.length,
+      messagesAtClose,
+      "Closing Harbor must stop cache polling.",
+    );
+    assert.equal(received.length, 2);
+    assert.doesNotMatch(
+      messages.join("\n"),
+      /private-|delivery failed|unexpectedly/,
+    );
+  },
+);
+
+test(
+  "a missing Desktop cache stays nonfatal and its retry stops on cancellation",
+  { timeout: 5000 },
+  async () => {
+    const controller = new AbortController();
+    const messages: string[] = [];
+    const running = runDesktopWatcher({
+      directory: join(tmpdir(), `harbor-missing-${crypto.randomUUID()}`),
+      logger: {
+        error: (message) => messages.push(message),
+        log: (message) => messages.push(message),
+      },
+      port: 1,
+      signal: controller.signal,
+    });
+    try {
+      await waitFor(() =>
+        messages.some((message) => message.includes("Monitoring paused")),
+      );
+      controller.abort();
+      await running;
+      const count = messages.length;
+      await delay(1100);
+      assert.equal(messages.length, count);
+    } finally {
+      controller.abort();
+      await running;
+    }
+  },
+);
