@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { localNetworkUrls } from "./server/network-urls.ts";
 import { createReceiver } from "./server/receiver.ts";
 
 export default defineConfig({
@@ -8,7 +9,9 @@ export default defineConfig({
     {
       name: "harbor-local-receiver",
       configureServer(server) {
-        const receiver = createReceiver();
+        const receiver = createReceiver(() =>
+          localNetworkUrls(server.httpServer?.address() ?? null),
+        );
         server.middlewares.use((req, res, next) => {
           void receiver
             .handle(req, res)

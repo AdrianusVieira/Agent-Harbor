@@ -5,6 +5,101 @@ import { test } from "node:test";
 import { createReceiver } from "./receiver.ts";
 import type { HarborEvent } from "../src/events.ts";
 
+test("network information is current, uncached, read-only, and same-origin", async (t) => {
+  let urls = ["http://192.168.1.20:5173/"];
+  const receiver = createReceiver(() => urls);
+  const server = createServer((req, res) => void receiver.handle(req, res));
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => {
+    receiver.close();
+    server.closeAllConnections();
+    server.close();
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const base = `http://127.0.0.1:${address.port}`;
+  const get = () => fetch(`${base}/api/network`, { headers: { Origin: base } });
+  const first = await get();
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get("Cache-Control"), "no-store");
+  assert.deepEqual(await first.json(), { urls });
+  urls = ["http://192.168.1.30:5173/"];
+  assert.deepEqual(await (await get()).json(), { urls });
+  urls = [];
+  assert.deepEqual(await (await get()).json(), { urls: [] });
+  assert.equal((await fetch(`${base}/api/network`, { method: "POST" })).status, 405);
+  assert.equal((await fetch(`${base}/api/network`, { headers: { Origin: "http://other.example" } })).status, 403);
+});
+
+test("Wi-Fi viewers receive history but cannot submit events or tool returns", async (t) => {
+  const receiver = createReceiver();
+  let remoteAddress: string | undefined = "127.0.0.1";
+  const server = createServer((req, res) => {
+    // Exercise the receiver with socket peer identities, never forwarded headers.
+    Object.defineProperty(req.socket, "remoteAddress", {
+      value: remoteAddress,
+      configurable: true,
+    });
+    void receiver.handle(req, res);
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => {
+    receiver.close();
+    server.closeAllConnections();
+    server.close();
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const base = `http://127.0.0.1:${address.port}`;
+  const post = (path: string) =>
+    fetch(`${base}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "127.0.0.1",
+      },
+      body: JSON.stringify({
+        source: "codex",
+        sessionId: "wifi-check",
+        type: "ready",
+        message: "Ready.",
+      }),
+    });
+  for (const local of ["127.0.0.1", "::1", "::ffff:127.0.0.1"]) {
+    remoteAddress = local;
+    assert.equal((await post("/api/events")).status, 201);
+  }
+  for (const remote of [
+    "192.168.1.20", "::ffff:192.168.1.20", "2001:db8::1", undefined,
+  ]) {
+    remoteAddress = remote;
+    for (const path of [
+      "/api/events", "/api/codex/tool-returned", "/api/claude-code/tool-returned",
+    ]) {
+      assert.equal((await post(path)).status, 403);
+    }
+  }
+  remoteAddress = "192.168.1.20";
+  const controller = new AbortController();
+  try {
+    const stream = await fetch(`${base}/api/stream`, {
+      signal: controller.signal,
+      headers: { Origin: base },
+    });
+    assert.equal(stream.status, 200);
+    const chunk = await stream.body!.getReader().read();
+    const history = JSON.parse(
+      new TextDecoder().decode(chunk.value).split("data: ")[1].trim(),
+    ) as HarborEvent[];
+    assert.equal(history.length, 3);
+    assert.ok(history.every((event) => event.sessionId === "wifi-check"));
+  } finally {
+    controller.abort();
+  }
+});
+
 test("receiver validates events and delivers live events and reconnect history", async (t) => {
   const receiver = createReceiver();
   const server = createServer((req, res) => {

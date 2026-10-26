@@ -171,6 +171,63 @@ h1 {
   align-items: center;
   padding: 18px 0 23px;
 }
+.wifi-access {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  margin-bottom: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.wifi-description h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+}
+.wifi-description p,
+.wifi-note {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.wifi-addresses {
+  min-width: 0;
+}
+.wifi-address {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wifi-address input {
+  width: 31ch;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--sub);
+  font: 12px var(--mono);
+}
+.wifi-address button {
+  min-width: 62px;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--sub);
+  font-size: 11px;
+}
+.wifi-copy-status {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+.wifi-copy-status:not(:empty) {
+  margin-top: 6px;
+}
 .session-summary > div {
   display: flex;
   align-items: baseline;
@@ -683,6 +740,32 @@ h1 {
   }
 }
 @media (max-width: 760px) {
+  .wifi-access {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 16px 12px;
+  }
+  .wifi-address input {
+    flex: 1;
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .wifi-address button {
+    min-height: 44px;
+  }
+  .boat-dismiss {
+    width: 44px;
+    height: 44px;
+    top: 0;
+    right: 0;
+  }
+  .logbook-button,
+  .session-navigation button,
+  .terminal-actions button,
+  .filters button {
+    min-height: 44px;
+  }
   .app-shell {
     width: calc(100% - 40px);
   }
@@ -731,6 +814,9 @@ h1 {
     justify-content: flex-end;
   }
   .search input {
+    min-height: 44px;
+    min-width: 0;
+    font-size: 16px;
     width: 140px;
   }
   .event-row {
@@ -748,6 +834,13 @@ h1 {
   }
 }
 @media (max-width: 420px) {
+  .wifi-address {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .wifi-address input {
+    flex-basis: 100%;
+  }
   .app-shell {
     width: calc(100% - 24px);
   }
@@ -782,6 +875,11 @@ h1 {
   }
   .harbor-titlebar {
     padding: 0 12px;
+    gap: 8px;
+  }
+  .harbor-titlebar .terminal-path {
+    gap: 8px;
+    font-size: 11px;
   }
   .harbor-legend {
     flex-wrap: wrap;
@@ -798,6 +896,16 @@ h1 {
     padding-left: 5px;
     padding-right: 5px;
   }
+  .terminal-titlebar {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .terminal-actions {
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
   .search {
     justify-content: flex-start;
     flex-basis: 100%;
@@ -805,6 +913,7 @@ h1 {
     padding-top: 6px;
   }
   .search input {
+    flex: 1;
     width: 100%;
   }
   .terminal-status {
@@ -813,6 +922,11 @@ h1 {
   }
   .app-footer {
     flex-direction: column;
+  }
+}
+@media (max-width: 360px) {
+  .boat-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (prefers-reduced-motion: reduce) {

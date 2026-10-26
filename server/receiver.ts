@@ -58,7 +58,7 @@ function json(res: ServerResponse, status: number, value: unknown) {
 }
 
 // Development-only receiver. The browser reconnects with a full bounded snapshot.
-export function createReceiver() {
+export function createReceiver(networkUrls: () => string[] = () => []) {
   const clients = new Set<ServerResponse>();
   const events: HarborEvent[] = [];
   const pendingApprovals = new Map<
@@ -104,6 +104,7 @@ export function createReceiver() {
           : undefined;
     if (
       path !== "/api/events" &&
+      path !== "/api/network" &&
       path !== "/api/stream" &&
       returnSource === undefined
     )
@@ -115,6 +116,16 @@ export function createReceiver() {
       req.headers.origin !== `http://${req.headers.host}`
     ) {
       json(res, 403, { error: "Cross-origin requests are not accepted." });
+      return true;
+    }
+
+    if (path === "/api/network") {
+      if (req.method !== "GET") {
+        res.setHeader("Allow", "GET");
+        json(res, 405, { error: "Use GET to read network addresses." });
+      } else {
+        json(res, 200, { urls: networkUrls() });
+      }
       return true;
     }
 
@@ -136,6 +147,16 @@ export function createReceiver() {
     }
 
     if (path !== "/api/stream" && req.method === "POST") {
+      // Wi-Fi clients may view events; only local observers may submit them.
+      const address = req.socket.remoteAddress;
+      if (
+        address !== "127.0.0.1" &&
+        address !== "::1" &&
+        address !== "::ffff:127.0.0.1"
+      ) {
+        json(res, 403, { error: "Event submissions require a loopback connection." });
+        return true;
+      }
       if (
         req.headers["content-type"]?.split(";")[0].trim() !== "application/json"
       ) {

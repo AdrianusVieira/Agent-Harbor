@@ -27,6 +27,8 @@ Claude Code and Codex have user-level installers, so you can connect local sessi
 
 Requires npm and Node.js **20.19+ on the 20.x line, or 22.12+**. Connecting an agent also requires that agent's hook support.
 
+The dashboard and Wi-Fi server use portable Node.js/browser APIs and should also run on Linux and Windows, but the current setup has only been tested on macOS. The hook installers require a POSIX shell; native Windows hook setup is not supported. The experimental Claude Desktop observer is macOS-specific. Viewing Harbor from another device only requires a browser, regardless of that device's operating system.
+
 ```sh
 git clone https://github.com/AdrianusVieira/Agent-Harbor.git
 cd Agent-Harbor
@@ -35,6 +37,22 @@ npm run dev
 ```
 
 Open <http://127.0.0.1:5173>. Keep the development server running while monitoring sessions. The same server serves the UI and receives events; the stream starts empty until a connected agent sends something.
+
+### View on a phone over Wi-Fi
+
+Stop the existing development server, then start Harbor with:
+
+```sh
+npm run dev:lan
+```
+
+Connect your phone to the same trusted Wi-Fi as the host computer. Open the `Network` URL printed by Vite, such as `http://192.168.1.20:5173`, in your phone's browser. The dashboard adapts to small screens and shares the host's live event history. Boat dismissals and view controls belong to each browser. Keep the host awake and Harbor running; restarting the server clears its in-memory history.
+
+The dashboard's **Open on another device** panel also shows the host's current private IPv4 URLs, with a Copy button. Addresses refresh every 30 seconds and when the page regains focus. It uses the server's listening port and network interfaces; it does not test whether another device can connect. Multiple local interfaces can produce multiple addresses. Loopback-only mode does not advertise a Wi-Fi URL.
+
+Both startup commands use port **5173** and stop with an error if it is occupied, rather than switching ports. The host's Wi-Fi IP address can change. If an old phone link stops working, open Harbor locally on the host computer to find the updated URL.
+
+This command listens on all IPv4 interfaces. Devices that can reach that port can view session names and events without a login. Use it only on a trusted local network, without public port forwarding. Event submissions remain restricted to loopback connections, so existing local observers need no changes. Return to `npm run dev` for access from the host computer only. If the phone cannot connect, check the host firewall and whether the Wi-Fi isolates devices from one another.
 
 ### Connect Claude Code
 
@@ -165,7 +183,7 @@ The bundled observers send the source, session ID, optional session name, event 
 
 Events go to the local loopback receiver. The observers emit no context or approval decisions; delivery failures exit normally so an unavailable Harbor receiver does not block an agent. Events are not queued or retried while Harbor is offline.
 
-The receiver has **no authentication** and is intended for local development. Keep it bound to `127.0.0.1`; it is not a hosted monitoring service. Hook setup applies to local clients using the configured agent home, not remote sessions, cloud environments, or other machines.
+The receiver has **no authentication** and is intended for local development. The default `npm run dev` binds to `127.0.0.1`; `npm run dev:lan` explicitly enables viewing over a trusted local network as described above. Event submissions require a loopback connection in either mode. It is not a hosted monitoring service. Hook setup applies to local clients using the configured agent home, not remote sessions, cloud environments, or other machines.
 
 There is currently no event persistence, installed background service, screen capture, dedicated Cowork hook integration, or desktop notification system. Only boat-dismissal markers persist in browser storage. The experimental Desktop observer has the narrower coverage described above.
 

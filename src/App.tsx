@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { EVENT_LIMIT, eventLabels, eventSymbols } from "./events.ts";
 import type { HarborEvent } from "./events.ts";
+import { WifiAccess } from "./WifiAccess.tsx";
 
 type Connection = "connecting" | "connected" | "disconnected";
 
@@ -256,6 +257,8 @@ export function App() {
                 : "Receiver offline · retrying"}
           </div>
         </section>
+
+        <WifiAccess />
 
         {selectedSession === null ? (
           <>

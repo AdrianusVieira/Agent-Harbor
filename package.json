@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "dev": "vite --host 127.0.0.1 --strictPort",
+    "dev:lan": "vite --host 0.0.0.0 --strictPort",
     "hooks:codex:install": "tsx scripts/configure-codex-hooks.ts install",
     "hooks:codex:preview": "tsx scripts/configure-codex-hooks.ts install --dry-run",
     "hooks:codex:uninstall": "tsx scripts/configure-codex-hooks.ts uninstall",
