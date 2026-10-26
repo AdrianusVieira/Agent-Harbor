@@ -85,7 +85,7 @@ test("setup preserves unrelated settings and hooks, is repeatable, and uninstall
   assert.equal((await configureClaudeHooks(path, "uninstall")).changed, false);
 });
 
-test("reinstallation removes obsolete tool-result hooks and preserves unrelated handlers", async (t) => {
+test("reinstallation replaces obsolete result hooks with quiet return observers and preserves unrelated handlers", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "harbor-hook-migration-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const path = join(directory, "settings.json");
@@ -109,13 +109,15 @@ test("reinstallation removes obsolete tool-result hooks and preserves unrelated 
   assert.equal(result.changed, true);
   assert.ok(result.backup);
   const { hooks } = JSON.parse(await readFile(path, "utf8"));
-  assert.equal(Object.hasOwn(hooks, "PostToolUse"), false);
-  assert.deepEqual(hooks.PostToolUseFailure, [
-    { hooks: [unrelated], matcher: "*" },
-  ]);
   for (const [event, groups] of Object.entries(createClaudeHooks())) {
-    assert.deepEqual(hooks[event], groups);
+    assert.deepEqual(
+      hooks[event],
+      event === "PostToolUseFailure"
+        ? [{ hooks: [unrelated], matcher: "*" }, ...groups]
+        : groups,
+    );
   }
+  assert.ok(!JSON.stringify(hooks).includes("old/claude-tool-result.ts"));
   assert.equal((await configureClaudeHooks(path, "install")).changed, false);
 });
 
@@ -132,7 +134,14 @@ test("setup creates missing settings and refuses malformed settings without over
   await configureClaudeHooks(path, "install");
   assert.deepEqual(
     Object.keys(JSON.parse(await readFile(path, "utf8")).hooks).sort(),
-    ["PermissionRequest", "SessionStart", "Stop", "UserPromptSubmit"],
+    [
+      "PermissionRequest",
+      "PostToolUse",
+      "PostToolUseFailure",
+      "SessionStart",
+      "Stop",
+      "UserPromptSubmit",
+    ],
   );
   for (const contents of [
     "{",
@@ -189,10 +198,12 @@ test(
       child.stdin.end(
         JSON.stringify({
           hook_event_name: event,
+          prompt_id: "foreign-prompt",
           session_id: "other-project",
           session_title: "Other project",
           source: "startup",
           tool_name: "Bash",
+          tool_input: { command: "foreign-command" },
         }),
       );
       assert.equal((await once(child, "close"))[0], 0, stderr);
@@ -204,7 +215,7 @@ test(
       assert.ok(!registration.hooks[0].command.includes("CLAUDE_PROJECT_DIR"));
       await run(registration.hooks[0].command, event);
     }
-    assert.equal(received.length, 4);
+    assert.equal(received.length, 6);
     assert.ok(
       received.every(
         (event) =>
@@ -221,6 +232,6 @@ test(
         .command,
       "UserPromptSubmit",
     );
-    assert.equal(received.length, 5);
+    assert.equal(received.length, 7);
   },
 );

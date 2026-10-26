@@ -5,6 +5,8 @@ export const harborRoot = fileURLToPath(new URL("../", import.meta.url));
 const marker = " # agent-harbor";
 const scripts = {
   PermissionRequest: "claude-permission-request.ts",
+  PostToolUse: "claude-tool-returned.ts",
+  PostToolUseFailure: "claude-tool-returned.ts",
   SessionStart: "claude-session-start.ts",
   Stop: "claude-reply-ready.ts",
   UserPromptSubmit: "claude-prompt-submit.ts",
@@ -41,7 +43,9 @@ export function createClaudeHooks(root = harborRoot, node = process.execPath) {
               type: "command",
             },
           ],
-          ...(event === "PermissionRequest"
+          ...(event === "PermissionRequest" ||
+          event === "PostToolUse" ||
+          event === "PostToolUseFailure"
             ? { matcher: "*" }
             : event === "SessionStart"
               ? { matcher: "startup" }

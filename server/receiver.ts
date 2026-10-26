@@ -96,10 +96,16 @@ export function createReceiver() {
 
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const path = req.url?.split("?")[0];
+    const returnSource =
+      path === "/api/codex/tool-returned"
+        ? "codex"
+        : path === "/api/claude-code/tool-returned"
+          ? "claude-code"
+          : undefined;
     if (
       path !== "/api/events" &&
       path !== "/api/stream" &&
-      path !== "/api/codex/tool-returned"
+      returnSource === undefined
     )
       return false;
 
@@ -150,7 +156,7 @@ export function createReceiver() {
         const value: unknown = JSON.parse(
           Buffer.concat(chunks).toString("utf8"),
         );
-        if (path === "/api/codex/tool-returned") {
+        if (returnSource) {
           if (!value || typeof value !== "object" || Array.isArray(value))
             throw new Error("Expected a JSON object.");
           const { approvalKey: key, sessionId } = value as Record<
@@ -163,20 +169,24 @@ export function createReceiver() {
             !sessionId.trim() ||
             sessionId.length > 120
           )
-            throw new Error("Invalid Codex tool-return metadata.");
+            throw new Error("Invalid tool-return metadata.");
           const id = sessionId.trim();
-          const pending = pendingApprovals.get(id);
+          const identity = JSON.stringify([returnSource, id]);
+          const pending = pendingApprovals.get(identity);
           // Unrelated or late tool returns never overwrite ready/new activity.
           if (
             pending?.keys.delete(key) &&
             !pending.keys.size &&
             !pending.untracked
           ) {
-            pendingApprovals.delete(id);
+            pendingApprovals.delete(identity);
             appendEvent({
-              message: "Codex continued after a permission request.",
+              message:
+                returnSource === "codex"
+                  ? "Codex continued after a permission request."
+                  : "Claude Code continued after a permission request.",
               sessionId: id,
-              source: "codex",
+              source: returnSource,
               type: "activity",
             });
           }
@@ -184,9 +194,10 @@ export function createReceiver() {
           res.end();
         } else {
           const input = parseEvent(value);
-          if (input.source === "codex") {
+          if (input.source === "codex" || input.source === "claude-code") {
+            const identity = JSON.stringify([input.source, input.sessionId]);
             if (input.type === "waiting") {
-              const pending = pendingApprovals.get(input.sessionId) ?? {
+              const pending = pendingApprovals.get(identity) ?? {
                 keys: new Set<string>(),
                 untracked: false,
               };
@@ -200,10 +211,10 @@ export function createReceiver() {
                 // Keep waiting until the next lifecycle signal in that case.
                 pending.untracked = true;
               } else pending.keys.add(key);
-              pendingApprovals.set(input.sessionId, pending);
+              pendingApprovals.set(identity, pending);
               if (pendingApprovals.size > EVENT_LIMIT)
                 pendingApprovals.delete(pendingApprovals.keys().next().value!);
-            } else pendingApprovals.delete(input.sessionId);
+            } else pendingApprovals.delete(identity);
           }
           json(res, 201, appendEvent(input));
         }

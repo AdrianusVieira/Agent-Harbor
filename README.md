@@ -45,7 +45,7 @@ npm run hooks:preview
 npm run hooks:install
 ```
 
-This installs four background observers in `~/.claude/settings.json`: `SessionStart` (startup), `UserPromptSubmit`, `PermissionRequest`, and `Stop`. If `CLAUDE_CONFIG_DIR` is set, setup uses `settings.json` in that directory instead.
+This installs six background handlers in `~/.claude/settings.json`: `SessionStart` (startup), `UserPromptSubmit`, `PermissionRequest`, `PostToolUse`, `PostToolUseFailure`, and `Stop`. The two tool-return handlers only help clear matching permission waits; ordinary tool results do not add events to the log. If `CLAUDE_CONFIG_DIR` is set, setup uses `settings.json` in that directory instead.
 
 Open a fresh local Claude Code session to load the hooks. Complete any normal trust prompts in Claude Code. For custom labels, give your session a name with `/rename` where supported.
 
@@ -130,20 +130,20 @@ Claude Code and Codex boats gently sail when their latest signal is **working** 
 
 Use the **×** on a boat to clear it from the harbor. It stays hidden across reloads and reconnects until a new event arrives for that same source and session ID. Clearing a boat does not delete its history. The browser stores up to 500 dismissal markers (source/session IDs and last-event IDs) locally; if browser storage is unavailable, dismissal lasts only for the page visit. Clearing site data resets these markers.
 
-| Label           | What was observed                                                                  |
-| --------------- | ---------------------------------------------------------------------------------- |
-| **started**     | A Claude Code session started.                                                     |
-| **working**     | A prompt was submitted, or a Codex tool returned after a matching permission wait. |
-| **needs input** | An agent requested tool permission, or Desktop presented a structured question.    |
-| **reply ready** | The agent finished its current response.                                           |
+| Label           | What was observed                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| **started**     | A Claude Code session started.                                                                 |
+| **working**     | A prompt was submitted, or a Claude Code/Codex tool returned after a matching permission wait. |
+| **needs input** | An agent requested tool permission, or Desktop presented a structured question.                |
+| **reply ready** | The agent finished its current response.                                                       |
 
 **Reply ready means a response is available, not that the overall task is complete.** Individual tool successes and failures are intentionally excluded. The event contract also accepts `error` and `ended`, but the bundled observers do not currently emit them.
 
-A permission request can be handled by automatic review without a human prompt. Harbor does not detect the instant of approval, denial, or cancellation. For Codex, a matching tool return clears the observed permission wait; when no other tracked or ambiguous wait remains, Harbor emits **working** with “Codex continued after a permission request.” and removes the orange dot. **Reply ready** still comes only from response completion. Approval stays in the originating agent.
+A permission request can be handled by automatic review without a human prompt. Harbor does not detect the instant of approval, denial, or cancellation. For Claude Code and Codex, a matching tool return clears the observed permission wait; when no other tracked or ambiguous wait remains, Harbor emits **working** and removes the orange dot. Claude Code observes both successful and failed tool returns, excluding interrupted failures. These continuation messages are permission-state transitions; ordinary tool results stay out of the log. **Reply ready** still comes only from response completion. Approval stays in the originating agent.
 
 Codex interactive question forms are not currently monitored. Asking the user a question is a separate interaction from requesting tool permission, so it may not produce a **needs input** event. A boat can therefore retain its earlier working signal while such a question is open.
 
-Codex request/return matching uses an opaque SHA-256 fingerprint of session, turn, canonical tool name, and shared tool-input metadata. The receiver uses it privately; it does not appear in event history. Matching is best effort: missing metadata, identical overlapping calls, lost or out-of-order hook delivery, or a receiver restart can leave a wait unresolved until another lifecycle signal. A long-running approved command can keep the orange dot until it returns. There is no timeout-based clearing or per-tool completion/error feed. Claude Code and Desktop keep their existing waiting-to-ready behavior.
+Request/return matching uses an opaque SHA-256 fingerprint of session, prompt ID (Claude Code) or turn ID (Codex), canonical tool name, and shared tool-input metadata. The receiver keeps each source's pending waits separate, and fingerprints do not appear in event history. Matching is best effort: missing metadata, identical overlapping calls, lost or out-of-order hook delivery, or a receiver restart can leave a wait unresolved until another lifecycle signal. Claude Code runtimes that omit `prompt_id` retain the wait until another lifecycle signal. A long-running approved command can keep the orange dot until it returns. There is no timeout-based clearing or per-tool completion/error feed. Desktop/Cowork keeps its existing waiting-to-ready behavior.
 
 The stream is a history of observations. A quiet session is not proof that it stopped or is stuck, and counts are not a complete inventory of running agents. The terminal's Attention filter includes historical waiting/error events, even if a later event changed that session's status. Boat dots and summary counts use each visible boat's latest event.
 
@@ -161,7 +161,7 @@ Missing name metadata never blocks event delivery. A newly created session may s
 
 ## Privacy and limits
 
-The bundled observers send the source, session ID, optional session name, event type, and a fixed message. Permission messages also include the tool name. They do not forward prompt text, response text, raw tool arguments, tool output, transcript content, model details, or working directories. Codex permission/return observers additionally send an opaque matching fingerprint to the loopback receiver, derived in memory without persisting the input. This fingerprint is not encryption or anonymization. It and the bounded pending-wait state stay out of the browser's event stream. Custom session names are displayed in Harbor, so their contents are part of the monitoring data.
+The bundled observers send the source, session ID, optional session name, event type, and a fixed message. Permission messages also include the tool name. They do not forward prompt text, response text, raw tool arguments, tool output/error details, transcript content, model details, or working directories. Claude Code and Codex permission/return observers additionally send an opaque matching fingerprint to the loopback receiver, derived in memory without persisting the input. This fingerprint is not encryption or anonymization. It and the bounded pending-wait state stay out of the browser's event stream. Custom session names are displayed in Harbor, so their contents are part of the monitoring data.
 
 Events go to the local loopback receiver. The observers emit no context or approval decisions; delivery failures exit normally so an unavailable Harbor receiver does not block an agent. Events are not queued or retried while Harbor is offline.
 
@@ -189,7 +189,7 @@ Observers default to port **5173**. `HARBOR_PORT`, when inherited by the agent p
 agent hook → observer → POST /api/events → in-memory history → SSE → React UI
 ```
 
-Codex's `PostToolUse` observer instead posts minimal matching metadata to `/api/codex/tool-returned`. The receiver publishes an activity event only when a matching pending permission group clears; ordinary or unrelated returns produce no history entry.
+Tool-return observers instead post minimal matching metadata to `/api/codex/tool-returned` or `/api/claude-code/tool-returned`. The receiver publishes an activity event only when a matching pending permission group clears; ordinary or unrelated returns produce no history entry.
 
 React and plain CSS provide the monochrome terminal interface. A small Node HTTP middleware in Vite validates events and streams them with Server-Sent Events. There is no database or state-management dependency.
 

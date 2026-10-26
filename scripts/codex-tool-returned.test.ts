@@ -23,6 +23,11 @@ const payload = {
 
 test("Codex approval fingerprints match shared metadata without disclosing it", () => {
   const key = codexApprovalKey(payload);
+  assert.equal(
+    key,
+    "0c7108e290eba09b4d554c05f819ca00a639e9d1d806b71e579d3b6f0f92f64e",
+    "Existing Codex fingerprints must remain compatible.",
+  );
   assert.match(key!, /^[a-f0-9]{64}$/);
   assert.equal(
     key,

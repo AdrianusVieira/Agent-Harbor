@@ -44,6 +44,7 @@ export async function configureClaudeHooks(
         "claude-prompt-submit.ts",
         "claude-reply-ready.ts",
         "claude-session-start.ts",
+        "claude-tool-returned.ts",
       ].map((name) => `scripts/${name}`),
     ])
       await access(join(harborRoot, file));

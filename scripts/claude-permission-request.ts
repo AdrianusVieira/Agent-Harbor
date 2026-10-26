@@ -1,4 +1,5 @@
 import type { EventInput } from "../src/events.ts";
+import { claudeApprovalKey } from "./claude-approval-key.ts";
 
 // Observe the request without returning an approval decision to Claude.
 try {
@@ -43,7 +44,10 @@ try {
       type: "waiting",
     };
     const response = await fetch(`http://127.0.0.1:${port}/api/events`, {
-      body: JSON.stringify(event),
+      body: JSON.stringify({
+        ...event,
+        approvalKey: claudeApprovalKey(input as Record<string, unknown>),
+      }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
       redirect: "error",
