@@ -8,15 +8,15 @@ Agent Harbor is an early learning project built with React, TypeScript, and Vite
 
 - A live event stream with session names, sources, timestamps, and status labels.
 - Counts based on each observed session's latest received event.
-- Text search and an Attention filter for permission requests and errors.
+- Text search and an Attention filter for input requests and errors.
 - Pause/resume and Clear view controls.
 - The last 500 events, held in memory and replayed when the browser reconnects.
 
-| Integration                   | Session startup | Prompt submitted | Permission requested | Response finished |
-| ----------------------------- | --------------- | ---------------- | -------------------- | ----------------- |
-| Claude Code                   | Yes             | Yes              | Yes                  | Yes               |
-| Codex                         | —               | Yes              | Yes                  | Yes               |
-| Claude Desktop (experimental) | —               | —                | —                    | Cache observation |
+| Integration                   | Session startup | Prompt submitted | Permission requested | Structured question | Response finished |
+| ----------------------------- | --------------- | ---------------- | -------------------- | ------------------- | ----------------- |
+| Claude Code                   | Yes             | Yes              | Yes                  | —                   | Yes               |
+| Codex                         | —               | Yes              | Yes                  | —                   | Yes               |
+| Claude Desktop (experimental) | —               | —                | —                    | Cache observation   | Cache observation |
 
 Claude Code and Codex have user-level installers, so you can connect local sessions across projects without adding Harbor scripts to each repository. Codex delivery has been exercised in the CLI, VS Code extension, and desktop app. Hook availability depends on your installed client and version. The installers target macOS/POSIX shells; Windows setup is not supported yet.
 
@@ -65,7 +65,7 @@ See the [Codex hook reference](https://learn.chatgpt.com/docs/hooks) for hook av
 
 ### Experimental Claude Desktop observer
 
-This is a separate, manually started prototype for macOS that reports completion from supported Claude Desktop cache records. These records use a generic `chat` classification; the observer cannot reliably distinguish Cowork tasks from ordinary chats. Events therefore use source **`claude-desktop`**.
+This is a separate, manually started prototype for macOS that reports structured input requests and response completion from supported Claude Desktop cache records. These records use a generic `chat` classification; the observer cannot reliably distinguish Cowork tasks from ordinary chats. Events therefore use source **`claude-desktop`**.
 
 Keep `npm run dev` running. In a second terminal in the Harbor checkout:
 
@@ -73,7 +73,9 @@ Keep `npm run dev` running. In a second terminal in the Harbor checkout:
 npm run watch:claude-desktop
 ```
 
-Wait for **baseline loaded**, then send a new prompt in Claude Desktop. A newly cached response whose active assistant message has `stop_reason: end_turn` can produce **reply ready**. Existing history is ignored at startup. Renaming or rereading the same completed response does not send another event. Press **Ctrl+C** in the watcher terminal to stop it; nothing is installed in Claude settings or registered to start automatically.
+Wait for **baseline loaded**, then send a new prompt in Claude Desktop. A newly cached response whose active assistant message has `stop_reason: end_turn` can produce **reply ready**. If that active reply contains a successful `ask_user_input_v0` call, it produces **needs input** with the fixed message “Claude Desktop asked for input.” instead. A later completed reply without another structured question produces **reply ready**. Old questions in earlier messages are ignored. Existing history is ignored at startup, and renaming or rereading a response does not send another event. Press **Ctrl+C** in the watcher terminal to stop it; nothing is installed in Claude settings or registered to start automatically.
+
+Structured questions are observed requests for input, not tool-permission gates or an explicit live “unanswered” flag. The observer does not interpret ordinary chat text as a question or detect the instant you select an answer. It can remain **needs input** until the following response finishes. Live **needs input → reply ready** delivery has been verified for a named conversation; Skip/cancel behavior remains unverified. If a later cache write adds a question to the same response, **needs input** takes priority and that response cannot switch back to ready; a new response is required.
 
 The observer polls once per second, but delivery depends on when Desktop saves its cache. Live delivery has been verified for a named Desktop conversation, including a user-run minimized-window check. Coverage beyond those checks remains experimental. It does not observe prompt submission, processing, approval requests, or the instant a response becomes visible. To reject late-loaded history, it checks the message's `updated_at`, falling back to `created_at` when the update timestamp is absent. These dates do not establish completion; `end_turn` does. Starting the watcher after a response has begun can miss that response if its stored message timestamp predates the baseline.
 
@@ -85,7 +87,7 @@ npm run watch:claude-desktop -- --once
 
 Compatibility is intentionally limited to inline conversation records in numbered LevelDB `.log` files, Blink serialization version 21, and supported V8 15/16 values. The reader checks fragment checksums and tolerates incomplete tails without opening the database through LevelDB or modifying it. Compacted `.ldb` files, external/compressed blobs, and unsupported values are not decoded; a warning means coverage is incomplete. Limits are 8 MiB per log, 32 MiB total, and 32 logs. Missing/corrupt logs pause reading; a detected sequence reset or gap establishes a fresh baseline without replaying history. Intermediate responses can be missed between snapshots.
 
-**Privacy:** the cache contains conversation content. The observer decodes supported records in memory, extracts only IDs, saved names, and completion metadata, and sends the same minimal event fields as the other adapters. It does not save cache copies to disk or log/forward prompt/response text or tool arguments. It keeps only bounded completion identities in memory between scans. Receiver failures have a timeout and are not retried. The prototype uses no screenshots, Claude credentials, private network APIs, or changes to permissions.
+**Privacy:** the cache contains conversation content. The observer decodes supported records in memory, extracts only IDs, saved names, and response/question-request metadata, and sends the same minimal event fields as the other adapters. It does not save cache copies to disk or log/forward prompt/response text, question/answer text, choices, or tool arguments. It keeps only bounded observation identities in memory between scans. Receiver failures have a timeout and are not retried. The prototype uses no screenshots, Claude credentials, private network APIs, or changes to permissions.
 
 ### Check the connection
 
@@ -117,12 +119,12 @@ Uninstall preserves unrelated settings and hooks. Backups stay beside the corres
 
 ## Reading the stream
 
-| Label           | What was observed                                                |
-| --------------- | ---------------------------------------------------------------- |
-| **started**     | A Claude Code session started.                                   |
-| **working**     | A prompt was submitted; another hook may still block processing. |
-| **needs input** | An agent requested permission to use a tool.                     |
-| **reply ready** | The agent finished its current response.                         |
+| Label           | What was observed                                                               |
+| --------------- | ------------------------------------------------------------------------------- |
+| **started**     | A Claude Code session started.                                                  |
+| **working**     | A prompt was submitted; another hook may still block processing.                |
+| **needs input** | An agent requested tool permission, or Desktop presented a structured question. |
+| **reply ready** | The agent finished its current response.                                        |
 
 **Reply ready means a response is available, not that the overall task is complete.** Individual tool successes and failures are intentionally excluded. The event contract also accepts `error` and `ended`, but the bundled observers do not currently emit them.
 

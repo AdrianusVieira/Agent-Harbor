@@ -66,14 +66,15 @@ function tree(
   name: unknown = "Harbor check",
   timestamp = START + 1000,
 ) {
+  const content: Record<string, unknown>[] = [
+    {
+      input: { command: "private-tool-arguments" },
+      text: "private-response",
+      type: "text",
+    },
+  ];
   const message = {
-    content: [
-      {
-        input: { command: "private-tool-arguments" },
-        text: "private-response",
-        type: "text",
-      },
-    ],
+    content,
     created_at: new Date(timestamp).toISOString(),
     sender: "assistant",
     stop_reason: "end_turn",
@@ -94,6 +95,33 @@ function tree(
       uuid: ID,
     },
   };
+}
+
+function questionTree(leaf = LEAF, name = "Harbor check") {
+  const data = tree(leaf, name);
+  data.tree.chat_messages[0].content.push(
+    {
+      id: "private-question-call",
+      input: {
+        questions: [
+          {
+            options: ["private-yes", "private-no"],
+            question: "private-question",
+            type: "single_select",
+          },
+        ],
+      },
+      name: "ask_user_input_v0",
+      type: "tool_use",
+    },
+    {
+      content: [{ text: "private-tool-result", type: "text" }],
+      is_error: false,
+      tool_use_id: "private-question-call",
+      type: "tool_result",
+    },
+  );
+  return data;
 }
 
 function batch(sequence: number, writes: { key?: Buffer; value?: Buffer }[]) {
@@ -396,7 +424,7 @@ test("Desktop snapshots select the current leaf, enforce identity, and skip unsu
     const data = tree();
     mutate(data);
     await writeFile(file, log([batch(1, [{ value: value(data) }])]));
-    assert.equal((await readDesktopSnapshot(directory)).completions.length, 0);
+    assert.equal((await readDesktopSnapshot(directory)).observations.length, 0);
   }
   for (const name of [null, 42, "", "x".repeat(201)]) {
     await writeFile(
@@ -404,7 +432,7 @@ test("Desktop snapshots select the current leaf, enforce identity, and skip unsu
       log([batch(1, [{ value: value(tree(LEAF, name)) }])]),
     );
     assert.equal(
-      (await readDesktopSnapshot(directory)).completions[0].event.sessionName,
+      (await readDesktopSnapshot(directory)).observations[0].event.sessionName,
       undefined,
     );
   }
@@ -418,10 +446,10 @@ test("Desktop snapshots select the current leaf, enforce identity, and skip unsu
     ]),
   );
   const result = await readDesktopSnapshot(directory);
-  assert.equal(result.completions.length, 1);
+  assert.equal(result.observations.length, 1);
   assert.equal(result.skipped, 1);
   await appendFile(file, fragment(1, batch(3, [{ key: key() }])));
-  assert.equal((await readDesktopSnapshot(directory)).completions.length, 0);
+  assert.equal((await readDesktopSnapshot(directory)).observations.length, 0);
 });
 
 test("fresh Desktop replies may have only created_at; missing or invalid timestamps stay ineligible", async (t) => {
@@ -432,13 +460,13 @@ test("fresh Desktop replies may have only created_at; missing or invalid timesta
   Reflect.deleteProperty(data.tree.chat_messages[0], "updated_at");
   await writeFile(file, log([batch(1, [{ value: value(data) }])]));
   assert.equal(
-    (await readDesktopSnapshot(directory)).completions[0].messageAt,
+    (await readDesktopSnapshot(directory)).observations[0].messageAt,
     START + 1000,
   );
   data.tree.chat_messages[0].stop_reason = "tool_use";
   await writeFile(file, log([batch(1, [{ value: value(data) }])]));
   assert.equal(
-    (await readDesktopSnapshot(directory)).completions.length,
+    (await readDesktopSnapshot(directory)).observations.length,
     0,
     "A creation date alone must not imply completion.",
   );
@@ -448,8 +476,186 @@ test("fresh Desktop replies may have only created_at; missing or invalid timesta
       Reflect.deleteProperty(data.tree.chat_messages[0], "created_at");
     else data.tree.chat_messages[0].created_at = created_at;
     await writeFile(file, log([batch(1, [{ value: value(data) }])]));
-    assert.equal((await readDesktopSnapshot(directory)).completions.length, 0);
+    assert.equal((await readDesktopSnapshot(directory)).observations.length, 0);
   }
+});
+
+test("only a successful structured question on the active finished reply reports input requested", async (t) => {
+  const directory = await mkdtemp(
+    join(tmpdir(), "harbor-desktop-question-schema-"),
+  );
+  t.after(() => rm(directory, { force: true, recursive: true }));
+  const file = join(directory, "000001.log");
+  const snapshot = async (data: ReturnType<typeof tree>) => {
+    await writeFile(file, log([batch(1, [{ value: value(data) }])]));
+    return readDesktopSnapshot(directory);
+  };
+  assert.equal(
+    (await snapshot(questionTree())).observations[0].event.type,
+    "waiting",
+  );
+  for (const mutate of [
+    (d: ReturnType<typeof tree>) => {
+      d.tree.chat_messages[0].content[1].name = "another_tool";
+    },
+    (d: ReturnType<typeof tree>) => {
+      d.tree.chat_messages[0].content[1].id = "";
+    },
+    (d: ReturnType<typeof tree>) => {
+      d.tree.chat_messages[0].content[1].input = { questions: [] };
+    },
+    (d: ReturnType<typeof tree>) => {
+      d.tree.chat_messages[0].content[1].input = {
+        questions: [{ question: "" }],
+      };
+    },
+    (d: ReturnType<typeof tree>) => {
+      d.tree.chat_messages[0].content[2].is_error = true;
+    },
+    (d: ReturnType<typeof tree>) => {
+      Reflect.deleteProperty(d.tree.chat_messages[0].content[2], "is_error");
+    },
+    (d: ReturnType<typeof tree>) => {
+      d.tree.chat_messages[0].content[2].tool_use_id = "unrelated-call";
+    },
+    (d: ReturnType<typeof tree>) => {
+      d.tree.chat_messages[0].content.pop();
+    },
+  ]) {
+    const data = questionTree();
+    mutate(data);
+    assert.equal((await snapshot(data)).observations[0].event.type, "ready");
+  }
+  const unfinished = questionTree();
+  unfinished.tree.chat_messages[0].stop_reason = "tool_use";
+  assert.equal((await snapshot(unfinished)).observations.length, 0);
+  assert.equal(
+    (await snapshot(tree())).observations[0].event.type,
+    "ready",
+    "Ordinary text is not interpreted as a question request.",
+  );
+});
+
+test("Desktop structured questions deliver waiting then ready without replaying history or leaking question/answer content", async (t) => {
+  const directory = await mkdtemp(
+    join(tmpdir(), "harbor-desktop-question-flow-"),
+  );
+  t.after(() => rm(directory, { force: true, recursive: true }));
+  const file = join(directory, "000001.log");
+  const receiver = createReceiver();
+  const server = createServer((req, res) => {
+    void receiver.handle(req, res);
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => {
+    receiver.close();
+    server.closeAllConnections();
+    server.close();
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const poll = createDesktopWatcher(directory, address.port, () => START);
+  const batches = [batch(1, [{ value: value(questionTree()) }])];
+  const save = () => writeFile(file, log(batches));
+  const history = async () => {
+    const controller = new AbortController();
+    const stream = await fetch(`http://127.0.0.1:${address.port}/api/stream`, {
+      signal: controller.signal,
+    });
+    const result = await stream.body!.getReader().read();
+    controller.abort();
+    const text = new TextDecoder().decode(result.value);
+    assert.doesNotMatch(
+      text,
+      /private-|questions|options|ask_user_input|tool_use_id|messageAt/,
+    );
+    return JSON.parse(text.split("data: ")[1].trim()) as HarborEvent[];
+  };
+  await save();
+  assert.equal((await poll()).baseline, true);
+  assert.equal(
+    (await history()).length,
+    0,
+    "Existing questions must not be replayed.",
+  );
+  const question = questionTree(NEXT);
+  batches.push(batch(2, [{ value: value(question) }]));
+  await save();
+  assert.equal((await poll()).delivered, 1);
+  const waiting = (await history())[0];
+  const { id, receivedAt, ...event } = waiting;
+  assert.ok(id && receivedAt);
+  assert.deepEqual(event, {
+    message: "Claude Desktop asked for input.",
+    sessionId: ID,
+    sessionName: "Harbor check",
+    source: "claude-desktop",
+    type: "waiting",
+  });
+  assert.equal((await poll()).delivered, 0);
+  question.tree.name = "Renamed";
+  batches.push(batch(3, [{ value: value(question) }]));
+  await save();
+  assert.equal((await poll()).delivered, 0);
+
+  const humanId = "44444444-4444-4444-8444-444444444444";
+  const replyId = "55555555-5555-4555-8555-555555555555";
+  const human = {
+    ...tree(humanId).tree.chat_messages[0],
+    parent_message_uuid: NEXT,
+    sender: "human",
+  };
+  human.content = [{ text: "private-answer", type: "text" }];
+  const answered = tree(replyId, "Renamed");
+  const humanState = {
+    ...question,
+    tree: {
+      ...question.tree,
+      chat_messages: [...question.tree.chat_messages, human],
+      current_leaf_message_uuid: humanId,
+    },
+  };
+  batches.push(batch(4, [{ value: value(humanState) }]));
+  await save();
+  assert.equal((await poll()).delivered, 0);
+  assert.equal(
+    (await history()).at(-1)?.type,
+    "waiting",
+    "No instant answer/resume event is claimed.",
+  );
+  answered.tree.chat_messages.unshift(...question.tree.chat_messages, human);
+  batches.push(batch(5, [{ value: value(answered) }]));
+  await save();
+  assert.equal((await poll()).delivered, 1);
+  assert.equal(
+    (await history()).at(-1)?.type,
+    "ready",
+    "Old questions in history must not keep the new reply waiting.",
+  );
+
+  // Later cache enrichment can add a question to an already observed response.
+  batches.push(batch(6, [{ value: value(questionTree(replyId, "Renamed")) }]));
+  await save();
+  assert.equal((await poll()).delivered, 1);
+  batches.push(batch(7, [{ value: value(tree(replyId, "Renamed")) }]));
+  await save();
+  assert.equal(
+    (await poll()).delivered,
+    0,
+    "A partial rewrite cannot downgrade the same question message to ready.",
+  );
+  batches.push(
+    batch(8, [
+      { value: value(tree("66666666-6666-4666-8666-666666666666", "Renamed")) },
+    ]),
+  );
+  await save();
+  assert.equal((await poll()).delivered, 1);
+  assert.deepEqual(
+    (await history()).map((e) => e.type),
+    ["waiting", "ready", "waiting", "ready"],
+  );
 });
 
 test("Desktop watcher CLI --once baselines an isolated cache without posting or exposing content", async (t) => {
@@ -484,7 +690,7 @@ test("Desktop watcher CLI --once baselines an isolated cache without posting or 
   assert.match(output, /baseline loaded \(1/);
   assert.doesNotMatch(output, /private-|11111111|Harbor check|delivery failed/);
   assert.deepEqual(
-    (await readDesktopSnapshot(directory)).completions[0].event.sessionId,
+    (await readDesktopSnapshot(directory)).observations[0].event.sessionId,
     ID,
   );
 });

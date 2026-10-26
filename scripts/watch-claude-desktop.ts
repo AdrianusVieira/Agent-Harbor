@@ -13,7 +13,7 @@ export function createDesktopWatcher(
     throw new Error("Invalid local receiver port.");
   let lastSequence: bigint | undefined;
   let observedAfter = now();
-  const seen = new Set<string>();
+  const seen = new Map<string, "ready" | "waiting">();
 
   // Call serially: a slow receiver must not cause overlapping cache scans.
   return async function poll() {
@@ -29,11 +29,15 @@ export function createDesktopWatcher(
     let delivered = 0;
     let failed = 0;
 
-    for (const item of snapshot.completions) {
+    for (const item of snapshot.observations) {
       const key = `${item.event.sessionId}:${item.messageId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      if (seen.size > 10_000) seen.delete(seen.values().next().value!);
+      const previousType = seen.get(key);
+      // A later cache write may add a question to the same response. Waiting
+      // takes precedence and cannot turn back into ready for that message ID.
+      if (previousType === "waiting" || previousType === item.event.type)
+        continue;
+      seen.set(key, item.event.type);
+      if (seen.size > 10_000) seen.delete(seen.keys().next().value!);
       // Late loading/renaming of an old response is not a new completion.
       if (
         baseline ||
@@ -59,9 +63,9 @@ export function createDesktopWatcher(
     }
     return {
       baseline,
-      completed: snapshot.completions.length,
       delivered,
       failed,
+      observed: snapshot.observations.length,
       reset: baseline && previous !== undefined,
       skipped: snapshot.skipped,
     };
@@ -101,7 +105,7 @@ async function main() {
         const result = await poll();
         if (result.baseline)
           console.log(
-            `Agent Harbor: baseline loaded (${result.completed} cached completed conversations). Waiting for new responses.`,
+            `Agent Harbor: baseline loaded (${result.observed} cached response observations). Waiting for new responses.`,
           );
         if (result.reset)
           console.error(
@@ -113,11 +117,11 @@ async function main() {
           );
         if (result.failed)
           console.error(
-            "Agent Harbor: reply-ready delivery failed. Check the local dev server. Events are not retried.",
+            "Agent Harbor: Desktop event delivery failed. Check the local dev server. Events are not retried.",
           );
         if (result.delivered)
           console.log(
-            `Agent Harbor: delivered ${result.delivered} reply-ready event(s).`,
+            `Agent Harbor: delivered ${result.delivered} Desktop event(s).`,
           );
         if (unavailable) console.log("Agent Harbor: cache reading resumed.");
         skipped = result.skipped > 0;

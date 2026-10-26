@@ -303,18 +303,18 @@ function object(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-export interface DesktopCompletion {
-  event: EventInput;
+export interface DesktopObservation {
+  event: EventInput & { type: "ready" | "waiting" };
   messageAt: number;
   messageId: string;
   sequence: bigint;
 }
 
-function completion(
+function observation(
   value: unknown,
   sessionId: string,
   sequence: bigint,
-): DesktopCompletion | undefined {
+): DesktopObservation | undefined {
   if (
     !object(value) ||
     value.product !== "chat" ||
@@ -349,13 +349,44 @@ function completion(
     typeof tree.name === "string" && tree.name.trim() && tree.name.length <= 200
       ? tree.name.trim()
       : undefined;
+  const content = Array.isArray(leaf.content) ? leaf.content : [];
+  // Report an observed structured question, not an inferred permission gate.
+  // The result must confirm success; an attempted/failed call isn't enough.
+  const askedForInput = content.some((call: unknown) => {
+    if (
+      !object(call) ||
+      call.type !== "tool_use" ||
+      call.name !== "ask_user_input_v0" ||
+      typeof call.id !== "string" ||
+      !call.id.trim() ||
+      !object(call.input) ||
+      !Array.isArray(call.input.questions) ||
+      !call.input.questions.length ||
+      !call.input.questions.every(
+        (question: unknown) =>
+          object(question) &&
+          typeof question.question === "string" &&
+          !!question.question.trim(),
+      )
+    )
+      return false;
+    return content.some(
+      (result: unknown) =>
+        object(result) &&
+        result.type === "tool_result" &&
+        result.tool_use_id === call.id &&
+        result.is_error === false,
+    );
+  });
   return {
     event: {
-      message: "Claude Desktop finished its response.",
+      message: askedForInput
+        ? "Claude Desktop asked for input."
+        : "Claude Desktop finished its response.",
       sessionId,
       ...(sessionName ? { sessionName } : {}),
       source: "claude-desktop",
-      type: "ready",
+      type: askedForInput ? "waiting" : "ready",
     },
     messageAt,
     messageId: tree.current_leaf_message_uuid,
@@ -420,24 +451,24 @@ export async function readDesktopSnapshot(directory: string) {
     }
   }
 
-  const completions: DesktopCompletion[] = [];
+  const observations: DesktopObservation[] = [];
   let skipped = 0;
   for (const write of latest.values()) {
     if (!write.value) continue;
     try {
-      const result = completion(
+      const result = observation(
         decodeCacheValue(write.value),
         conversationKey(write.key)!,
         write.sequence,
       );
-      if (result) completions.push(result);
+      if (result) observations.push(result);
     } catch {
       // No raw values or decoder errors leave this reader.
       skipped++;
     }
   }
-  completions.sort((a, b) =>
+  observations.sort((a, b) =>
     a.sequence < b.sequence ? -1 : a.sequence > b.sequence ? 1 : 0,
   );
-  return { completions, firstSequence, lastSequence, skipped };
+  return { firstSequence, lastSequence, observations, skipped };
 }
