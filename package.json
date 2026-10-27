@@ -7,6 +7,7 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
+    "auth:reset": "tsx scripts/reset-auth.ts",
     "build": "tsc --noEmit && vite build",
     "dev": "tsx scripts/start-harbor.ts --lan",
     "dev:lan": "tsx scripts/start-harbor.ts --lan",
@@ -18,21 +19,24 @@
     "hooks:preview": "tsx scripts/configure-claude-hooks.ts install --dry-run",
     "hooks:uninstall": "tsx scripts/configure-claude-hooks.ts uninstall",
     "preview": "vite preview --host 127.0.0.1 --strictPort",
+    "telemetry:import": "tsx scripts/import-telemetry.ts",
     "test": "tsx --test --test-concurrency=2 scripts/*.test.ts server/*.test.ts",
     "typecheck": "tsc --noEmit",
     "watch:claude-desktop": "tsx scripts/watch-claude-desktop.ts"
   },
   "dependencies": {
+    "better-sqlite3": "11.10.0",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
     "@types/node": "^22.0.0",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.3",
     "tsx": "4.23.0",
     "typescript": "6.0.3",
-    "vite": "8.1.0"
+    "vite": "8.3.5"
   }
 }

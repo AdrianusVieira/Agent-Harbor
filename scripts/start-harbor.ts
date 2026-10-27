@@ -16,10 +16,16 @@ try {
     },
   });
   await server.listen();
+  const backend = server.config.plugins.find(
+    (plugin) => plugin.name === "harbor-backend",
+  );
+  await backend?.api?.ready();
   server.printUrls();
   server.bindCLIShortcuts({ print: true });
 } catch (error) {
   await server?.close();
-  console.error(error instanceof Error ? error.message : "Harbor could not start.");
+  console.error(
+    error instanceof Error ? error.message : "Harbor could not start.",
+  );
   process.exitCode = 1;
 }

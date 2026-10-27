@@ -1,3 +1,4 @@
+import { authFetch } from "./auth-fetch.ts";
 import { useEffect, useRef, useState } from "react";
 
 function WifiAddress({ url }: { url: string }) {
@@ -46,7 +47,9 @@ function WifiAddress({ url }: { url: string }) {
       <span className="wifi-copy-status" role="status">
         {copyFailed
           ? "Address selected. Copy it from the text field."
-          : copied ? "Address copied." : ""}
+          : copied
+            ? "Address copied."
+            : ""}
       </span>
     </div>
   );
@@ -63,7 +66,7 @@ export function WifiAccess() {
       const request = new AbortController();
       controller = request;
       try {
-        const response = await fetch("/api/network", {
+        const response = await authFetch("/api/network", {
           cache: "no-store",
           signal: request.signal,
         });

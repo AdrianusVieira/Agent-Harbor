@@ -13,7 +13,7 @@ Agent Harbor is an early learning project built with React, TypeScript, and Vite
 - Counts based on the boats currently in view.
 - Text search and an Attention filter for input requests and errors.
 - Pause/resume and Clear view controls.
-- The last 500 events, held in memory and replayed when the browser reconnects.
+- The latest 500 signals in the live view, plus persistent, paged signal history.
 - Notification settings for event types, sound/volume, desktop alerts, tab indicators, and background-only delivery.
 
 | Integration                   | Session startup | Prompt submitted | Permission requested | Structured question | Response finished |
@@ -37,17 +37,182 @@ npm ci
 npm run dev
 ```
 
-Open <http://127.0.0.1:5173>. `npm run dev` starts one server for both the host computer and devices on the same trusted Wi-Fi. On macOS it also starts the experimental Claude Desktop observer; Ctrl+C stops both. The same server serves the UI and receives events; all addresses share its event history. Keep it running while monitoring sessions. The stream starts empty until a connected agent sends something.
+Open <http://127.0.0.1:5173>. `npm run dev` starts one server for both the host computer and devices on the same trusted Wi-Fi. On macOS it also starts the experimental Claude Desktop observer; Ctrl+C stops both. The same server serves the UI and receives events; all addresses share its event history. Keep it running while monitoring sessions. A fresh data directory starts empty until a connected agent sends something; later starts restore saved signals.
+
+### Local login
+
+Open <http://127.0.0.1:5173> on the computer running Harbor to create the first
+username and password. Use a username of 3–80 letters/numbers/dots/dashes/underscores
+and a password of at least 12 characters. This is one Harbor login for the entire
+local dataset; the telemetry Accounts page still describes agent account usage.
+After setup, sign in with the same login through the Wi-Fi URL on another device.
+Authenticated Wi-Fi users can now read account emails and captured sanitized
+prompt text. There is no localhost-only restriction after signing in.
+
+Browser APIs, saved history, network URLs, and the live SSE stream require a valid
+session, including on localhost. Before credentials exist, data access stays
+locked; first-account creation requires a same-origin request on localhost.
+Sign out in the sidebar (or top bar when the sidebar is hidden). Expired/revoked
+sessions cannot read new API data or receive new stream events; the UI returns to
+login when it observes invalidation. A suspended/offline browser may retain an
+already rendered page until it resumes.
+
+Login data lives in private `data/auth.sqlite3`, beside the telemetry and signal
+databases. The password uses a random salt and Node's asynchronous scrypt; plaintext
+passwords are not stored. Random sessions last 12 hours, persist through server
+restarts, and are stored as token hashes. Cookies are HttpOnly and SameSite=Strict;
+they use Secure when served directly over HTTPS. The app stores no passwords or
+session tokens in localStorage. Login work and attempts are bounded, and Origin,
+Host and actual socket-peer checks protect setup and browser requests. See
+[Node crypto](https://nodejs.org/api/crypto.html#cryptoscryptpassword-salt-keylen-options-callback)
+and [OWASP session guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html).
+
+To recover a forgotten login, run on the Harbor computer:
+
+```sh
+npm run auth:reset
+```
+
+Use the same `HARBOR_DATA_DIR` as the server if customized. Reset removes only the
+Harbor login and its sessions, preserving telemetry, lifecycle history and browser
+preferences. Reopen localhost to create a new login. There is no remote reset or
+public account registration.
+
+The existing HTTP Wi-Fi connection is **not encrypted**: credentials and cookies
+can be observed by someone able to inspect that network traffic. Use only trusted
+networks; this feature does not configure HTTPS or make Harbor suitable for public
+internet exposure. Login controls HTTP access; it does not encrypt the SQLite files
+or stop other programs running as your OS user from reading them.
+
+Agent collection remains independent of browser login. Only existing loopback
+command senders without a browser Origin may POST to the exact event/tool-return
+endpoints. OTLP collectors keep their existing loopback-only restrictions. Logging
+out, waiting to set up credentials, or resetting the login does not stop collection
+or change agent hooks, exporters, permissions, or trust.
+
+### Workspace navigation
+
+The sidebar has two sections, each with three separate pages:
+
+| Section | Pages |
+| --- | --- |
+| Harbor | Dashboard · Signal History · Notification Settings |
+| Telemetry | Dashboard · Sessions · Accounts |
+
+Harbor's Dashboard contains live boats and their logbooks. Signal History pages
+through saved lifecycle events. Notification Settings contains notification
+controls and Wi-Fi access. Telemetry's Dashboard contains usage totals and trends;
+Sessions provides search and session details; Accounts shows Claude account usage after login. Accounts has no Codex attribution because those records do not
+supply it. Each telemetry page requests only the data it displays.
+
+Hide/show sidebar is saved per browser origin. On small screens both labeled
+groups remain visible above the page. Routes support reload and Back/Forward:
+`#/harbor/dashboard`, `#/harbor/signals`, `#/harbor/notifications`,
+`#/telemetry/dashboard`, `#/telemetry/sessions`, and `#/telemetry/accounts`.
+Source-scoped session links remain supported, including older bookmarks. One live
+SSE subscription stays mounted across all pages, so navigation does not stop
+collection or alerts.
+
+### Local telemetry and saved history
+
+Harbor now collects Claude Code and Codex telemetry in the same process as its
+hook receiver and Desktop observer. Use **Harbor → Dashboard** for live boats. Under **Telemetry**, Dashboard shows source totals and the cumulative token chart, Sessions provides search and per-session tokens, request timing, prompts, and tool activity, and Accounts shows Claude account usage. Date filters apply to the displayed page. **Usage & history**
+on a boat opens that exact source/session. **Signal history** pages through saved
+lifecycle events. Imported usage does not create boats, change their status, or
+trigger notifications.
+
+The collector and usage-aggregation code is adapted from the sibling telemetry dashboards as consolidated in Minecode. Harbor does not depend on those checkouts at runtime.
+
+The local-only OTLP HTTP/JSON receivers are:
+
+| Source | Endpoint |
+| --- | --- |
+| Claude Code | `http://127.0.0.1:4318/v1/metrics` and `/v1/logs` |
+| Codex | `http://127.0.0.1:18766/v1/logs` |
+
+Stop Minecode and the standalone telemetry dashboard servers before starting
+Harbor: they use the same telemetry ports. Existing exporters targeting those
+addresses require no endpoint changes. A port conflict stops Harbor with an
+explanation and releases any partially opened listeners. Ctrl+C closes the
+collectors, SSE clients, Desktop observer, timers, and databases together. Vite
+configuration restarts also release the old collectors before listening again.
+No detached process, login service, or new hook registration is installed.
+
+For Claude Code, telemetry must already be enabled using
+`CLAUDE_CODE_ENABLE_TELEMETRY=1`, `OTEL_METRICS_EXPORTER=otlp`,
+`OTEL_LOGS_EXPORTER=otlp`, `OTEL_EXPORTER_OTLP_PROTOCOL=http/json`, and
+`OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318` in its launch environment or
+supported user settings. A `project.id` resource attribute or supported repository
+metadata supplies telemetry project labels. For Codex, the user-level `[otel]`
+configuration must use an `otlp-http` exporter with
+`endpoint = "http://127.0.0.1:18766/v1/logs"` and `protocol = "json"`.
+Changing exporter settings requires the client's normal reload/restart; Harbor
+never edits permission or trust settings. The hook installers configure lifecycle
+signals only, not OTLP exporters.
+
+History lives in Git-ignored `data/claude.sqlite3`, `data/codex.sqlite3`, and
+`data/signals.sqlite3`, plus `data/auth.sqlite3` for the local login. Set `HARBOR_DATA_DIR` consistently for import and startup
+to use another dedicated directory. The directory is private (0700) and databases
+are private (0600). Vite denies serving database files and the data directory.
+History is retained until you remove/archive it; there is no automatic age-based
+pruning in this version. Stop Harbor before backing up, moving, or deleting its
+storage. Do not delete SQLite WAL/SHM sidecars while a database is open.
+
+To merge history from sibling Minecode and both standalone dashboards, stop
+Harbor and run:
+
+```sh
+npm run telemetry:import
+npm run dev
+```
+
+Import uses consistent SQLite snapshots, merges existing record fingerprints to
+avoid counting overlapping copies twice, keeps the newest saved Claude titles,
+and honors deletion markers. Repeating it is safe. Original databases remain
+untouched and temporary snapshots are removed, including on failure. The importer
+uses those repositories' default `data/` locations; custom legacy locations need
+a separate migration. Fresh collection does not require the sibling checkouts.
+Harbor restores only its latest 500 saved signals to the live stream; older
+signals remain available in Signal history. Historical snapshots stay silent.
+Pending approval fingerprints are not persisted, so a restart cannot resolve an
+old permission wait using its old fingerprint. The next lifecycle signal can
+replace that historical status.
+
+**Data boundary:** telemetry is richer than Harbor's hook messages. The collectors
+allowlist usage fields and never store raw OTLP bodies, response text, tool
+arguments/results, or error details. They can store sanitized prompt text if the
+agent exports it. Claude's `OTEL_LOG_USER_PROMPTS=1` and Codex's
+`log_user_prompt = true` enable prompt export; leave them off to avoid capturing
+future prompt text. Sanitization is best effort and cannot guarantee complete
+redaction. Claude records can also contain account emails. Protect backups like
+the databases themselves.
+
+Authenticated browser clients can read usage summaries, session metadata, generic
+activity, saved lifecycle signals, account emails and sanitized prompt text, both
+on localhost and over Wi-Fi. Unauthenticated browser API requests return 401.
+No new transcript/title scanners are installed. New session labels come
+from existing hook metadata; imported explicit Claude titles remain available.
+Telemetry-only sessions stay in Telemetry until hooks supply lifecycle signals.
+Claude Desktop has no usage collector here.
+
+Claude costs are estimates and may be partial; active time is available only when
+reported. Codex cost and active time remain unavailable. Cached input and reasoning
+output are subsets, not extra tokens to add again. Telemetry delivery is batched,
+so it is not a replacement for hook-based waiting/ready transitions. Usage and
+session lists refresh every 15 seconds while the telemetry view is open. Session
+details are snapshots; returning to the list and reopening refreshes them. Historical
+queries run in a read-only worker thread so they do not block lifecycle delivery.
+The worker and its bounded caches close with Harbor; no child server is spawned.
 
 ### View on a phone over Wi-Fi
 
-With `npm run dev` already running, connect your phone to the same trusted Wi-Fi as the host computer. Open the `Network` URL printed at startup, such as `http://192.168.1.20:5173`, in your phone's browser. No second server or environment is needed. The dashboard adapts to small screens and shares the host's live event history. Boat dismissals and view controls belong to each browser. Keep the host awake and Harbor running; restarting the server clears its in-memory history. `npm run dev:lan` remains an alias for the same startup mode.
+With `npm run dev` already running, connect your phone to the same trusted Wi-Fi as the host computer. Open the `Network` URL printed at startup, such as `http://192.168.1.20:5173`, in your phone's browser. No second server or environment is needed. The dashboard adapts to small screens and shares the host's live event history. Boat dismissals and view controls belong to each browser. Keep the host awake and Harbor running; restarting the server restores the latest saved signals. Pending permission matching remains memory-only. `npm run dev:lan` remains an alias for the same startup mode.
 
-The dashboard's **Open on another device** panel also shows the host's current private IPv4 URLs, with a Copy button. Addresses refresh every 30 seconds and when the page regains focus. It uses the server's listening port and network interfaces; it does not test whether another device can connect. Multiple local interfaces can produce multiple addresses. Loopback-only mode does not advertise a Wi-Fi URL.
+In **Harbor → Notification Settings**, the **Open on another device** panel also shows the host's current private IPv4 URLs, with a Copy button. Addresses refresh every 30 seconds and when the page regains focus. It uses the server's listening port and network interfaces; it does not test whether another device can connect. Multiple local interfaces can produce multiple addresses. Loopback-only mode does not advertise a Wi-Fi URL.
 
 All startup commands use port **5173** and check for an existing local listener before starting, in addition to Vite's strict-port setting. Stop the running server before switching modes; running a local-only and Wi-Fi instance together can split hook delivery and browser history on systems that allow overlapping network bindings. The host's Wi-Fi IP address can change. If an old phone link stops working, open Harbor locally on the host computer to find the updated URL.
 
-The default command listens on all IPv4 interfaces. Devices that can reach that port can view session names and events without a login. Use it only on a trusted local network, without public port forwarding. Event submissions remain restricted to loopback connections, so existing local observers need no changes. For access from the host computer only, stop the server and run `npm run dev:local`. If the phone cannot connect, check the host firewall and whether the Wi-Fi isolates devices from one another.
+The default command listens on all IPv4 interfaces. Devices that can reach that port must sign in before viewing session names, events, or telemetry. Use it only on a trusted local network, without public port forwarding. Event submissions remain restricted to loopback connections, so existing local observers need no changes. For access from the host computer only, stop the server and run `npm run dev:local`. If the phone cannot connect, check the host firewall and whether the Wi-Fi isolates devices from one another.
 
 ### Connect Claude Code
 
@@ -141,7 +306,7 @@ the full path. This is a working-folder label, not a verified repository name or
 the Codex app's custom project title. Other senders can supply an explicit
 `projectName`; the Desktop cache observer currently supplies none. Missing
 metadata leaves the line out. The receiver retains the latest known project
-label per source/session within its in-memory history, and terminal search also
+label per source/session in local storage, and terminal search also
 matches it. Existing boats gain the label on a new event carrying this metadata.
 
 Project-label delivery and retention have been checked with isolated hook and
@@ -150,7 +315,7 @@ yet been verified for this addition.
 
 An orange dot marks a latest **needs input** or **error** event; a blue dot marks **reply ready**. Other statuses have no colored dot. Status text accompanies the colors. These are the latest observed signals, including when the receiver is offline; they are not proof of current processing or overall task completion.
 
-Returning to the tab, restoring the page, or reconnecting the network while Harbor is visible requests a fresh receiver snapshot. The connection indicator shows **Connecting…** until that snapshot arrives. This helps recover from stale browser connections after backgrounding; it cannot recover events the receiver never received or history lost when the server restarted.
+Returning to the tab, restoring the page, or reconnecting the network while Harbor is visible requests a fresh receiver snapshot. The connection indicator shows **Connecting…** until that snapshot arrives. This helps recover from stale browser connections after backgrounding; it cannot recover events the receiver never received or events that arrived while Harbor was stopped.
 
 Claude Code and Codex boats gently sail when their latest signal is **working** and the receiver is connected. The boat and water settle when that status changes or the connection drops. Reduced-motion preferences disable the animation. Desktop/Cowork boats stay still because working detection is unsupported there.
 
@@ -194,11 +359,11 @@ Sessions are identified by **source + session ID**, so matching names do not mer
 - **Codex:** reads the matching saved `thread_name` from `session_index.jsonl` under `CODEX_HOME` or `~/.codex`. This includes custom renames and may include generated names. The file is read-only and is an internal Codex format, so compatibility may change.
 - **Claude Desktop prototype:** reads the cached conversation's saved `tree.name`. It does not generate a name from message text.
 
-Missing name metadata never blocks event delivery. A newly created session may show its ID before a name is saved; Codex names are checked once per event without waiting or retrying. Subsequent events can carry the name, and the receiver retains known names within its buffered history. Historical rows keep their earlier labels.
+Missing name metadata never blocks event delivery. A newly created session may show its ID before a name is saved; Codex names are checked once per event without waiting or retrying. Subsequent events can carry the name, and the receiver retains known names in local storage. Historical rows keep their earlier labels.
 
 ### Notifications
 
-Open **Notification settings** below the Wi-Fi panel. Sound and desktop alerts start off; the tab indicator starts on. Choose **Needs input / error** and/or **Reply ready**. By default, sound and desktop alerts run only when that Harbor tab is in the background; turn off **Sound and desktop only in background** to receive them while viewing it too, including when keeping Harbor visible on a phone as a second screen. **Test sound** plays a preview regardless of the sound/background switches; its result explains whether live alerts are enabled or muted by those settings. Pausing the terminal does not pause alerts.
+Open **Harbor → Notification Settings**, below the Wi-Fi panel. Sound and desktop alerts start off; the tab indicator starts on. Choose **Needs input / error** and/or **Reply ready**. By default, sound and desktop alerts run only when that Harbor tab is in the background; turn off **Sound and desktop only in background** to receive them while viewing it too, including when keeping Harbor visible on a phone as a second screen. **Test sound** plays a preview regardless of the sound/background switches; its result explains whether live alerts are enabled or muted by those settings. Pausing the terminal does not pause alerts.
 
 - **Sound:** enable **Play a chime**, choose the volume, and use **Test sound**. Each chime has three spaced notes over about 0.9 seconds, rising for reply-ready and falling for attention. After opening or reloading a tab, browsers may require another click: the panel shows **Sound needs a click** with **Enable sound in this tab**. Live alerts try to resume a context you already activated; browser rejection or a stalled resume stays quiet and is reported. **Last live sound** explains foreground muting, disabled event types/volume, browser audio blocking, another tab's claim, or catch-up after reconnect. A link in Sound jumps to the background-only setting under Behavior. Sound is generated locally; no audio files or external service are used. Bursts are coalesced into one chime.
 - **Tab indicator:** new qualifying live events while you are away update the title, such as **(2) Agent Harbor**, and the favicon (orange for attention, blue for replies). The count is sessions with unseen alert events in that tab, not the harbor's total attention count. Returning to the tab clears it; later working/ended signals or reconnect snapshots can also resolve it. Browsers control whether they display favicons.
@@ -218,7 +383,7 @@ Events go to the local loopback receiver. The observers emit no context or appro
 
 The receiver has **no authentication** and is intended for local development on a trusted network. The default `npm run dev` enables local and same-Wi-Fi viewing; `npm run dev:local` binds only to `127.0.0.1`. Event submissions require a loopback connection in either mode. It is not a hosted monitoring service. Hook setup applies to local clients using the configured agent home, not remote sessions, cloud environments, or other machines.
 
-There is currently no event persistence, installed background service, screen capture, dedicated Cowork hook integration, or Web Push delivery. Boat-dismissal markers, notification preferences, and bounded event-ID/channel alert claims persist in browser storage. The experimental Desktop observer has the narrower coverage described above.
+Lifecycle signals and allowlisted telemetry now persist in local SQLite databases. There is no installed background service, screen capture, dedicated Cowork hook integration, or Web Push delivery. Boat-dismissal markers, notification preferences, and bounded event-ID/channel alert claims persist in browser storage. The experimental Desktop observer has the narrower coverage described above.
 
 ## Troubleshooting
 
@@ -239,17 +404,21 @@ Observers default to port **5173**. `HARBOR_PORT`, when inherited by the agent p
 ## Development
 
 ```text
-agent hook → observer → POST /api/events → in-memory history → SSE → React UI
+agent hook → observer → POST /api/events → SQLite + bounded live buffer → SSE → React UI
+agent OTLP exporter → loopback telemetry receiver → SQLite → telemetry views
 ```
 
 Tool-return observers instead post minimal matching metadata to `/api/codex/tool-returned` or `/api/claude-code/tool-returned`. The receiver publishes an activity event only when a matching pending permission group clears; ordinary or unrelated returns produce no history entry.
 
-React and plain CSS provide the monochrome terminal interface. A small Node HTTP middleware in Vite validates events and streams them with Server-Sent Events. There is no database or state-management dependency.
+React and plain CSS provide the monochrome terminal interface. A small Node HTTP middleware in Vite validates events and streams them with Server-Sent Events. SQLite stores local lifecycle and telemetry history through better-sqlite3. No cloud service is involved.
 
 | Path                                       | Purpose                                                          |
 | ------------------------------------------ | ---------------------------------------------------------------- |
 | [`scripts/`](scripts/)                     | Agent observers, hook installers, and isolated integration tests |
-| [`server/receiver.ts`](server/receiver.ts) | Event validation, bounded history, and SSE delivery              |
+| [`server/receiver.ts`](server/receiver.ts) | Event validation, persistent signals, and bounded SSE delivery |
+| [`scripts/telemetry-plugin.ts`](scripts/telemetry-plugin.ts) | Owns stores and receivers through listen, restart, and close |
+| [`server/telemetryApi.ts`](server/telemetryApi.ts) | Usage summaries, session details, accounts, and saved signals |
+| [`src/TelemetryPanel.tsx`](src/TelemetryPanel.tsx) | Usage history, date filters, charts, and session details |
 | [`src/App.tsx`](src/App.tsx)               | Event stream and browser controls                                |
 | [`src/events.ts`](src/events.ts)           | Shared event types and labels                                    |
 | [`src/styles.css`](src/styles.css)         | Design tokens and responsive layout                              |

@@ -1,4 +1,5 @@
 /* Shared monochrome colors and compact geometry from Mute and Cousin. */
+/* Historical usage shares Harbor's compact typography and restrained borders. */
 :root {
   color-scheme: dark;
   --bg: #090c10;
@@ -64,15 +65,10 @@ button:not(:disabled):hover {
   background: #bdc7d233;
 }
 .app-shell {
-  width: min(1160px, calc(100% - 96px));
+  width: 100%;
+  max-width: 1320px;
+  padding: 0 36px 24px;
   margin: auto;
-}
-.app-header {
-  height: 110px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--rule);
 }
 .brand {
   display: flex;
@@ -188,26 +184,118 @@ h1 {
   list-style: none;
   font-size: 12px;
 }
-.notification-settings summary::-webkit-details-marker { display: none; }
-.notification-settings summary::after { content: "+"; color: var(--muted); font: 18px var(--mono); }
-.notification-settings[open] summary::after { content: "−"; }
-.notification-summary { margin-left: auto; color: var(--muted); font-size: 10px; }
-.notification-body { border-top: 1px solid var(--rule); padding: 16px 18px; }
-.notification-intro { margin: 0 0 20px; color: var(--sub); font-size: 12px; line-height: 1.6; }
-.notification-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 32px; }
-.notification-grid fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
-.notification-grid legend { margin-bottom: 8px; padding: 0; font: 10px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
-.notification-check { display: flex; align-items: center; gap: 10px; min-height: 36px; font-size: 12px; cursor: pointer; line-height: 1.5; }
-.notification-check input { accent-color: var(--ready-signal); width: 16px; height: 16px; margin: 0; flex-shrink: 0; }
-.notification-help { margin: 8px 0 0; font-size: 11px; color: var(--muted); line-height: 1.6; }
-.notification-help a { text-decoration: underline; overflow-wrap: anywhere; }
-.notification-volume { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; max-width: 260px; font-size: 11px; color: var(--sub); }
-.notification-volume span { display: flex; justify-content: space-between; }
-.notification-volume input { width: 100%; accent-color: var(--ready-signal); margin: 0; min-height: 28px; }
-.notification-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-.notification-buttons button { background: transparent; border: 1px solid var(--border); padding: 8px 10px; font-size: 11px; min-height: 36px; }
-.notification-feedback { margin: 12px 0 0; color: var(--sub); font-size: 11px; line-height: 1.6; }
-.notification-feedback:empty { display: none; }
+.notification-settings summary::-webkit-details-marker {
+  display: none;
+}
+.notification-settings summary::after {
+  content: "+";
+  color: var(--muted);
+  font: 18px var(--mono);
+}
+.notification-settings[open] summary::after {
+  content: "−";
+}
+.notification-summary {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+.notification-body {
+  border-top: 1px solid var(--rule);
+  padding: 16px 18px;
+}
+.notification-intro {
+  margin: 0 0 20px;
+  color: var(--sub);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.notification-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 32px;
+}
+.notification-grid fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.notification-grid legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font: 10px var(--mono);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.notification-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1.5;
+}
+.notification-check input {
+  accent-color: var(--ready-signal);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+}
+.notification-help {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.notification-help a {
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+.notification-volume {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+  max-width: 260px;
+  font-size: 11px;
+  color: var(--sub);
+}
+.notification-volume span {
+  display: flex;
+  justify-content: space-between;
+}
+.notification-volume input {
+  width: 100%;
+  accent-color: var(--ready-signal);
+  margin: 0;
+  min-height: 28px;
+}
+.notification-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+.notification-buttons button {
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  font-size: 11px;
+  min-height: 36px;
+}
+.notification-feedback {
+  margin: 12px 0 0;
+  color: var(--sub);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.notification-feedback:empty {
+  display: none;
+}
 .wifi-access {
   display: flex;
   align-items: center;
@@ -788,11 +876,24 @@ h1 {
   }
 }
 @media (max-width: 760px) {
-  .notification-settings summary { flex-wrap: wrap; padding: 12px; }
-  .notification-summary { font-size: 10px; }
-  .notification-body { padding: 16px 12px; }
-  .notification-grid { grid-template-columns: minmax(0, 1fr); gap: 22px; }
-  .notification-check, .notification-buttons button { min-height: 44px; }
+  .notification-settings summary {
+    flex-wrap: wrap;
+    padding: 12px;
+  }
+  .notification-summary {
+    font-size: 10px;
+  }
+  .notification-body {
+    padding: 16px 12px;
+  }
+  .notification-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+  }
+  .notification-check,
+  .notification-buttons button {
+    min-height: 44px;
+  }
   .wifi-access {
     align-items: stretch;
     flex-direction: column;
@@ -820,10 +921,7 @@ h1 {
     min-height: 44px;
   }
   .app-shell {
-    width: calc(100% - 40px);
-  }
-  .app-header {
-    height: 90px;
+    padding: 0 20px 20px;
   }
   .overview {
     padding-top: 30px;
@@ -887,7 +985,11 @@ h1 {
   }
 }
 @media (max-width: 420px) {
-  .notification-summary { order: 3; flex-basis: 100%; margin-left: 0; }
+  .notification-summary {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+  }
   .wifi-address {
     flex-wrap: wrap;
     justify-content: flex-end;
@@ -896,7 +998,7 @@ h1 {
     flex-basis: 100%;
   }
   .app-shell {
-    width: calc(100% - 24px);
+    padding: 0 12px 16px;
   }
   .brand {
     font-size: 16px;
@@ -989,5 +1091,539 @@ h1 {
   *::after {
     animation: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+.usage-button,
+.boat-usage {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--sub);
+  padding: 9px 13px;
+  font-family: var(--mono);
+}
+.boat-usage {
+  margin: 0 12px 14px;
+  font-size: 11px;
+}
+.telemetry-panel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 24px;
+  margin-bottom: 36px;
+}
+.telemetry-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+.telemetry-toolbar label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--sub);
+}
+.telemetry-toolbar input,
+.telemetry-toolbar select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px;
+  border-radius: 4px;
+  max-width: 100%;
+  font: inherit;
+}
+.telemetry-toolbar input[type="search"] {
+  width: min(100%, 330px);
+}
+.telemetry-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.telemetry-error {
+  color: var(--input-signal);
+}
+.telemetry-heading {
+  font-size: 18px;
+  font-weight: 500;
+  margin: 20px 0;
+  overflow-wrap: anywhere;
+}
+.telemetry-heading small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.usage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.usage-metric {
+  border: 1px solid var(--border);
+  padding: 16px;
+  min-width: 0;
+}
+.usage-metric span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 10px;
+}
+.usage-metric strong {
+  font: 20px var(--mono);
+  overflow-wrap: anywhere;
+}
+.usage-table-wrap {
+  overflow: auto;
+  margin: 12px 0;
+}
+.usage-table {
+  border-collapse: collapse;
+  width: 100%;
+  font: 12px var(--mono);
+}
+.usage-table td,
+.usage-table th {
+  text-align: left;
+  border-bottom: 1px solid var(--rule);
+  padding: 14px 12px;
+  vertical-align: top;
+}
+.usage-table th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.usage-table td {
+  min-width: 100px;
+}
+.usage-table td:first-child {
+  min-width: 210px;
+  overflow-wrap: anywhere;
+}
+.usage-table small,
+.usage-activity small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 6px;
+}
+.usage-session {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.usage-timeline {
+  margin: 24px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+.usage-timeline figcaption {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font: 12px var(--mono);
+}
+.usage-timeline strong {
+  color: var(--text);
+  font-weight: 400;
+}
+.usage-timeline svg {
+  width: 100%;
+  height: auto;
+  max-height: 210px;
+}
+.usage-chart-axis {
+  stroke: var(--border);
+  fill: none;
+}
+.usage-chart-line {
+  stroke: var(--ready-signal);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.usage-timeline > div {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 10px;
+}
+.usage-prompt summary {
+  cursor: pointer;
+  line-height: 1.6;
+}
+.usage-prompt {
+  padding: 12px;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  font: 12px var(--mono);
+}
+.usage-prompt pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow: auto;
+  line-height: 1.6;
+}
+.usage-activity {
+  padding: 0;
+  list-style: none;
+}
+.usage-activity li {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 2fr 1fr;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--rule);
+  font: 12px var(--mono);
+  overflow-wrap: anywhere;
+}
+.usage-activity time {
+  color: var(--muted);
+  font-size: 11px;
+}
+.usage-activity p {
+  grid-column: 2 / -1;
+  margin: 0;
+  color: var(--sub);
+  line-height: 1.6;
+}
+.session-usage h3 {
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: 28px;
+}
+@media (max-width: 600px) {
+  .telemetry-panel {
+    padding: 14px;
+  }
+  .usage-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .usage-metric {
+    padding: 12px;
+  }
+  .usage-metric strong {
+    font-size: 16px;
+  }
+  .telemetry-toolbar input,
+  .telemetry-toolbar select {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .usage-button,
+  .boat-usage {
+    min-height: 44px;
+  }
+  .usage-activity li {
+    grid-template-columns: 1fr 1fr;
+  }
+  .usage-activity time,
+  .usage-activity p {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Grouped workspace navigation, shared by all six pages. */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+.page-area {
+  flex: 1;
+  min-width: 0;
+}
+.app-sidebar {
+  width: 232px;
+  flex-shrink: 0;
+  height: 100dvh;
+  position: sticky;
+  top: 0;
+  padding: 30px 18px 20px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: #0c1015;
+}
+.sidebar-brand {
+  margin-bottom: 38px;
+}
+.sidebar-brand .brand-caption {
+  font-size: 10px;
+}
+.sidebar-nav-group {
+  margin: 0 0 30px;
+}
+.sidebar-nav-group:last-child {
+  margin-bottom: 0;
+}
+.sidebar-group-label {
+  text-transform: uppercase;
+  color: var(--muted);
+  font: 11px var(--mono);
+  font-weight: 400;
+  letter-spacing: 2px;
+  margin: 0 12px 12px;
+}
+.sidebar-page {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  margin: 3px 0;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  border-radius: 4px;
+  color: var(--sub);
+  font-size: 13px;
+}
+.sidebar-page:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+.sidebar-page[aria-current="page"] {
+  background: #7eb8ec0c;
+  border-color: #7eb8ec20;
+  border-left-color: var(--ready-signal);
+  color: var(--ready-signal);
+}
+.sidebar-footer {
+  margin-top: auto;
+  padding: 28px 8px 0;
+}
+.sidebar-footer p {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+}
+.sidebar-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--sub);
+}
+.sidebar-footer .version {
+  display: block;
+  margin-top: 24px;
+  font-size: 9px;
+}
+.sidebar-toggle {
+  border: 1px solid var(--border);
+  color: var(--sub);
+  background: transparent;
+  padding: 9px 10px;
+  font-size: 11px;
+}
+.page-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  min-height: 62px;
+  padding: 14px 36px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--muted);
+  font: 11px var(--mono);
+}
+.page-topbar span[aria-hidden] {
+  margin: 0 10px;
+  color: var(--border);
+}
+.page-topbar-note {
+  margin-left: auto;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+}
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 12px;
+  z-index: 100;
+  padding: 12px 16px;
+  background: var(--text);
+  color: var(--bg);
+}
+.skip-link:focus {
+  top: 12px;
+}
+h1:focus {
+  outline: none;
+}
+.telemetry-source-label {
+  color: var(--sub);
+  font: 12px var(--mono);
+}
+@media (max-width: 980px) and (min-width: 781px) {
+  .app-sidebar {
+    width: 208px;
+    padding-inline: 12px;
+  }
+  .app-shell {
+    padding-inline: 24px;
+  }
+  .page-topbar {
+    padding-inline: 24px;
+  }
+}
+@media (max-width: 780px) {
+  .app-layout {
+    flex-direction: column;
+  }
+  .app-sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 18px 20px;
+    overflow: visible;
+  }
+  .sidebar-brand {
+    margin-bottom: 22px;
+  }
+  .app-sidebar nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+  .sidebar-nav-group {
+    min-width: 0;
+    margin-bottom: 0;
+  }
+  .sidebar-group-label {
+    font-size: 10px;
+    margin: 0 8px 8px;
+  }
+  .sidebar-page {
+    min-height: 44px;
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+  .sidebar-footer {
+    margin: 14px 0 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .sidebar-footer p,
+  .sidebar-footer .version {
+    display: none;
+  }
+  .page-topbar {
+    min-height: 52px;
+    padding-inline: 20px;
+  }
+  .page-topbar .sidebar-toggle {
+    min-height: 44px;
+  }
+}
+@media (max-width: 480px) {
+  .app-sidebar {
+    padding: 16px 12px;
+  }
+  .app-sidebar nav {
+    gap: 12px;
+  }
+  .page-topbar {
+    padding-inline: 12px;
+  }
+  .page-topbar-note {
+    display: none;
+  }
+}
+
+.login-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+.login-card {
+  width: min(100%, 430px);
+  padding: 30px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.login-card h1 {
+  font-size: 27px;
+  margin: 12px 0;
+  line-height: 1.25;
+}
+.login-card p {
+  color: var(--sub);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.login-card form {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+.login-card label {
+  display: grid;
+  gap: 8px;
+  color: var(--sub);
+}
+.login-card input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 16px;
+}
+.login-card button {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.login-card .login-note {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 0;
+}
+.login-card > .login-note {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  margin-top: 24px;
+}
+.signed-in-user {
+  display: block;
+  color: var(--sub);
+  font: 11px var(--mono);
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+.sidebar-footer > button {
+  margin: 8px 0;
+}
+@media (max-width: 780px) {
+  .sidebar-footer {
+    flex-wrap: wrap;
+  }
+  .signed-in-user {
+    margin: 0;
   }
 }

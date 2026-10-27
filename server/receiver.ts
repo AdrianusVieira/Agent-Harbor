@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { EVENT_LIMIT, eventTypes } from "../src/events.ts";
 import type { EventInput, HarborEvent } from "../src/events.ts";
+import type { SignalStore } from "./signalStore.ts";
 
 const MAX_BODY_BYTES = 16_384;
 
@@ -64,9 +65,13 @@ function json(res: ServerResponse, status: number, value: unknown) {
 }
 
 // Development-only receiver. The browser reconnects with a full bounded snapshot.
-export function createReceiver(networkUrls: () => string[] = () => []) {
-  const clients = new Set<ServerResponse>();
-  const events: HarborEvent[] = [];
+export function createReceiver(
+  networkUrls: () => string[] = () => [],
+  store?: SignalStore,
+  authorize?: (req: IncomingMessage) => boolean,
+) {
+  const clients = new Map<ServerResponse, () => boolean>();
+  const events: HarborEvent[] = store?.recent() ?? [];
   const pendingApprovals = new Map<
     string,
     { keys: Set<string>; untracked: boolean }
@@ -79,11 +84,15 @@ export function createReceiver(networkUrls: () => string[] = () => []) {
         (event) =>
           event.source === input.source && event.sessionId === input.sessionId,
       );
+    const saved = store?.metadata(input.source, input.sessionId);
     const projectName =
-      input.projectName ?? previous.find((event) => event.projectName)?.projectName;
+      input.projectName ??
+      previous.find((event) => event.projectName)?.projectName ??
+      saved?.projectName;
     const sessionName =
       input.sessionName ??
-      previous.find((event) => event.sessionName)?.sessionName;
+      previous.find((event) => event.sessionName)?.sessionName ??
+      saved?.sessionName;
     const event: HarborEvent = {
       ...input,
       id: randomUUID(),
@@ -91,10 +100,16 @@ export function createReceiver(networkUrls: () => string[] = () => []) {
       receivedAt: new Date().toISOString(),
       ...(sessionName ? { sessionName } : {}),
     };
+    store?.append(event);
     events.push(event);
     if (events.length > EVENT_LIMIT) events.shift();
-    for (const client of clients)
+    for (const [client, authorized] of clients) {
+      if (!authorized()) {
+        client.end();
+        continue;
+      }
       client.write(`event: event\ndata: ${JSON.stringify(event)}\n\n`);
+    }
     return event;
   }
 
@@ -138,6 +153,10 @@ export function createReceiver(networkUrls: () => string[] = () => []) {
     }
 
     if (path === "/api/stream" && req.method === "GET") {
+      if (authorize && !authorize(req)) {
+        json(res, 401, { error: "Log in to Harbor." });
+        return true;
+      }
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache, no-transform",
@@ -145,8 +164,12 @@ export function createReceiver(networkUrls: () => string[] = () => []) {
         "X-Accel-Buffering": "no",
       });
       res.write(`event: snapshot\ndata: ${JSON.stringify(events)}\n\n`);
-      clients.add(res);
-      const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 15_000);
+      const authorized = () => !authorize || authorize(req);
+      clients.set(res, authorized);
+      const heartbeat = setInterval(() => {
+        if (authorized()) res.write(": heartbeat\n\n");
+        else res.end();
+      }, 15_000);
       res.on("close", () => {
         clearInterval(heartbeat);
         clients.delete(res);
@@ -162,7 +185,9 @@ export function createReceiver(networkUrls: () => string[] = () => []) {
         address !== "::1" &&
         address !== "::ffff:127.0.0.1"
       ) {
-        json(res, 403, { error: "Event submissions require a loopback connection." });
+        json(res, 403, {
+          error: "Event submissions require a loopback connection.",
+        });
         return true;
       }
       if (
@@ -264,7 +289,7 @@ export function createReceiver(networkUrls: () => string[] = () => []) {
   }
 
   function close() {
-    for (const client of clients) client.end();
+    for (const client of clients.keys()) client.end();
     clients.clear();
     pendingApprovals.clear();
   }

@@ -1,11 +1,26 @@
 import { useEffect, useRef, useState } from "react";
-import { EVENT_LIMIT, eventLabels, eventSymbols, platformNames, sessionKey } from "./events.ts";
+import {
+  EVENT_LIMIT,
+  eventLabels,
+  eventSymbols,
+  platformNames,
+  sessionKey,
+} from "./events.ts";
 import type { HarborEvent } from "./events.ts";
 import { watchHarborStream } from "./harbor-stream.ts";
 import type { Connection } from "./harbor-stream.ts";
 import { WifiAccess } from "./WifiAccess.tsx";
 import { NotificationSettings } from "./NotificationSettings.tsx";
 import { useNotifications } from "./useNotifications.ts";
+import { TelemetryPanel } from "./TelemetryPanel.tsx";
+import { SignalHistory } from "./SignalHistory.tsx";
+import { AppShell } from "./AppShell.tsx";
+import {
+  appRouteHash,
+  parseAppRoute,
+  telemetryPageFor,
+  type AppRoute,
+} from "./app-route.ts";
 
 function readDismissedSessions(): Map<string, string> {
   try {
@@ -81,7 +96,30 @@ export function App() {
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [pausedEvents, setPausedEvents] = useState<HarborEvent[] | null>(null);
   const [query, setQuery] = useState("");
-  const [selectedSession, setSelectedSession] = useState<string | null>(null);
+  const [route, setRoute] = useState(() => parseAppRoute(location.hash));
+  const selectedSession = route.sessionKey ?? null;
+  const usageTarget = route.usageTarget ?? null;
+  const workspace = route.page;
+  const telemetryPage = telemetryPageFor(route);
+
+  function navigate(next: AppRoute) {
+    setRoute(next);
+    const hash = appRouteHash(next);
+    if (location.hash !== hash) location.hash = hash;
+  }
+
+  useEffect(() => {
+    const restore = () => {
+      setPausedEvents(null);
+      setRoute(parseAppRoute(location.hash));
+    };
+    window.addEventListener("hashchange", restore);
+    return () => window.removeEventListener("hashchange", restore);
+  }, []);
+
+  useEffect(() => {
+    document.getElementById("page-title")?.focus();
+  }, [workspace, telemetryPage]);
 
   const backButton = useRef<HTMLButtonElement>(null);
   const followTail = useRef(true);
@@ -105,7 +143,11 @@ export function App() {
 
   useEffect(() => {
     return watchHarborStream({
-      connection: setConnection,
+      connection: (state) => {
+        setConnection(state);
+        if (state === "disconnected")
+          window.dispatchEvent(new Event("harbor:auth-check"));
+      },
       snapshot: (snapshot) => {
         onSnapshot(snapshot);
         setEvents(snapshot);
@@ -179,14 +221,26 @@ export function App() {
     setFilter("all");
     setPausedEvents(null);
     setQuery("");
-    setSelectedSession(key);
+    navigate({ page: "harbor", sessionKey: key });
     followTail.current = true;
   }
 
   function returnToHarbor() {
     setPausedEvents(null);
-    setSelectedSession(null);
+    navigate({ page: "harbor" });
     requestAnimationFrame(() => homeButton.current?.focus());
+  }
+
+  function openUsage(event: HarborEvent) {
+    if (event.source !== "claude-code" && event.source !== "codex") return;
+    navigate({
+      page: "telemetry",
+      telemetryPage: "sessions",
+      usageTarget: {
+        source: event.source === "claude-code" ? "claude" : "codex",
+        id: event.sessionId,
+      },
+    });
   }
 
   function dismissSession(event: HarborEvent) {
@@ -207,40 +261,60 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <button
-          className="brand"
-          onClick={returnToHarbor}
-          aria-label="Agent Harbor home"
-        >
-          <span className="brand-emblem">
-            <HarborMark />
-          </span>
-          <span>
-            Agent Harbor
-            <span className="brand-caption">a quiet place for busy agents</span>
-          </span>
-        </button>
-        <span className="version">LOCAL / v0.1</span>
-      </header>
-
+    <AppShell
+      route={route}
+      connection={connection}
+      mark={<HarborMark />}
+      onNavigate={navigate}
+    >
       <main>
         <section className="overview" aria-labelledby="page-title">
           <div>
             <p className="eyebrow">
-              {selectedSession ? "THE LOGBOOK" : "YOUR HARBOR"}
+              {workspace === "settings"
+                ? "HARBOR / NOTIFICATIONS"
+                : workspace === "telemetry"
+                  ? `TELEMETRY / ${telemetryPage.toUpperCase()}`
+                  : workspace === "history"
+                    ? "SAVED SIGNALS"
+                    : selectedSession
+                      ? "THE LOGBOOK"
+                      : "YOUR HARBOR"}
             </p>
-            <h1 id="page-title">
-              {selectedSession
-                ? (selected?.sessionName ??
-                  (selected ? selected.sessionId : "Every signal, in sight."))
-                : "A berth for every session."}
+            <h1 id="page-title" tabIndex={-1}>
+              {workspace === "settings"
+                ? "Notification Settings"
+                : workspace === "telemetry"
+                  ? usageTarget
+                    ? "Session details"
+                    : telemetryPage === "dashboard"
+                      ? "Dashboard"
+                      : telemetryPage === "sessions"
+                        ? "Sessions"
+                        : "Accounts"
+                  : workspace === "history"
+                    ? "Signal History"
+                    : selectedSession
+                      ? (selected?.sessionName ??
+                        (selected
+                          ? selected.sessionId
+                          : "Every signal, in sight."))
+                      : "A berth for every session."}
             </h1>
             <p className="intro">
-              {selectedSession
-                ? "A closer look at the signals received."
-                : "A little fleet. A clearer head."}
+              {workspace === "settings"
+                ? "Notifications and access, on your terms."
+                : workspace === "telemetry"
+                  ? telemetryPage === "dashboard"
+                    ? "A clear view of your observed usage."
+                    : telemetryPage === "sessions"
+                      ? "Explore usage and activity, one session at a time."
+                      : "Usage attributed to your Claude Code accounts."
+                  : workspace === "history"
+                    ? "Observed lifecycle events, preserved across restarts."
+                    : selectedSession
+                      ? "A closer look at the signals received."
+                      : "A little fleet. A clearer head."}
             </p>
           </div>
           <div className="receiver-status" role="status">
@@ -253,10 +327,38 @@ export function App() {
           </div>
         </section>
 
-        <WifiAccess />
-        <NotificationSettings alerts={notifications} />
-
-        {selectedSession === null ? (
+        {workspace === "settings" ? (
+          <section aria-label="Harbor settings">
+            <WifiAccess />
+            <NotificationSettings alerts={notifications} />
+          </section>
+        ) : workspace === "telemetry" ? (
+          <TelemetryPanel
+            key={`${telemetryPage}:${usageTarget ? `${usageTarget.source}:${usageTarget.id}` : (route.telemetrySource ?? "overview")}`}
+            page={telemetryPage}
+            initialTarget={usageTarget}
+            initialSource={route.telemetrySource}
+            onOpen={(source, id, page = telemetryPage) =>
+              navigate(
+                id
+                  ? {
+                      page: "telemetry",
+                      telemetryPage: "sessions",
+                      usageTarget: { source, id },
+                    }
+                  : page === "accounts"
+                    ? { page: "telemetry", telemetryPage: page }
+                    : {
+                        page: "telemetry",
+                        telemetryPage: page,
+                        telemetrySource: source,
+                      },
+              )
+            }
+          />
+        ) : workspace === "history" ? (
+          <SignalHistory />
+        ) : selectedSession === null ? (
           <>
             <section
               className="session-summary"
@@ -366,7 +468,10 @@ export function App() {
                             {platformNames[event.source] ?? event.source}
                           </span>
                           {event.projectName && (
-                            <span className="boat-project" title={event.projectName}>
+                            <span
+                              className="boat-project"
+                              title={event.projectName}
+                            >
                               Project · {event.projectName}
                             </span>
                           )}
@@ -385,6 +490,16 @@ export function App() {
                             </time>
                           </span>
                         </button>
+                        {(event.source === "claude-code" ||
+                          event.source === "codex") && (
+                          <button
+                            className="boat-usage"
+                            onClick={() => openUsage(event)}
+                            aria-label={`Open usage for ${name}`}
+                          >
+                            Usage & history ↗
+                          </button>
+                        )}
                         <button
                           className="boat-dismiss"
                           onClick={() => dismissSession(event)}
@@ -418,6 +533,16 @@ export function App() {
                   : "All platforms"}
               </span>
             </nav>
+            {selected &&
+              (selected.source === "claude-code" ||
+                selected.source === "codex") && (
+                <button
+                  className="usage-button"
+                  onClick={() => openUsage(selected)}
+                >
+                  Session usage & history ↗
+                </button>
+              )}
             <section className="terminal" aria-label="Event terminal">
               <div className="terminal-titlebar">
                 <div className="terminal-path">
@@ -590,8 +715,8 @@ export function App() {
                   shown
                 </span>
                 <span>
-                  local time<span className="status-separator">/</span>in memory
-                  · last {EVENT_LIMIT}
+                  local time<span className="status-separator">/</span>live
+                  window · last {EVENT_LIMIT}
                 </span>
               </div>
             </section>
@@ -605,6 +730,6 @@ export function App() {
           AGENT HARBOR<span className="footer-divider">/</span>OBSERVE FIRST
         </span>
       </footer>
-    </div>
+    </AppShell>
   );
 }
