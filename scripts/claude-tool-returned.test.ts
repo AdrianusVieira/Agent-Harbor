@@ -64,6 +64,79 @@ test("Claude permission fingerprints are prompt-scoped and tolerate request-only
   );
 });
 
+test("Claude question fingerprints stay stable when the answer enriches tool input", () => {
+  const questions = [
+    {
+      header: "private-header",
+      multiSelect: false,
+      options: [
+        { description: "private-description-a", label: "private-option-a" },
+        { description: "private-description-b", label: "private-option-b" },
+      ],
+      question: "private-question",
+    },
+  ];
+  const request = {
+    ...payload,
+    tool_input: { questions },
+    tool_name: "AskUserQuestion",
+  };
+  const key = claudeApprovalKey(request);
+  assert.match(key!, /^[a-f0-9]{64}$/);
+  assert.equal(
+    key,
+    claudeApprovalKey({
+      ...request,
+      tool_input: {
+        answers: { "private-question": "private-answer" },
+        annotations: { "private-question": { notes: "private-notes" } },
+        questions,
+        response: "private-freeform-response",
+      },
+    }),
+  );
+  assert.notEqual(
+    key,
+    claudeApprovalKey({ ...request, prompt_id: "other-prompt" }),
+  );
+  assert.notEqual(
+    key,
+    claudeApprovalKey({ ...request, session_id: "other-session" }),
+  );
+  assert.notEqual(
+    key,
+    claudeApprovalKey({
+      ...request,
+      tool_input: {
+        questions: [{ ...questions[0], question: "other-question" }],
+      },
+    }),
+  );
+  assert.notEqual(
+    key,
+    claudeApprovalKey({
+      ...request,
+      tool_input: {
+        questions: [{ ...questions[0], options: [{ label: "other-option" }] }],
+      },
+    }),
+  );
+  for (const questions of [
+    undefined,
+    null,
+    "invalid",
+    [],
+    [null],
+    [{}],
+    Array(5).fill({ question: "private-question" }),
+  ]) {
+    assert.equal(
+      claudeApprovalKey({ ...request, tool_input: { questions } }),
+      undefined,
+    );
+  }
+});
+
 test(
   "Claude success/failure returns clear only matched waits without tool-result rows",
   { timeout: 60_000 },
@@ -209,6 +282,50 @@ test(
     const count = events.length;
     await run("PostToolUse");
     assert.equal((await history()).length, count);
+
+    const question = {
+      ...payload,
+      tool_input: {
+        questions: [
+          {
+            header: "private-header",
+            options: [
+              { label: "private-option-a" },
+              { label: "private-option-b" },
+            ],
+            question: "private-question",
+          },
+        ],
+      },
+      tool_name: "AskUserQuestion",
+    };
+    const answered = {
+      ...question,
+      tool_input: {
+        ...question.tool_input,
+        answers: { "private-question": "private-answer" },
+        annotations: { "private-question": { notes: "private-notes" } },
+        response: "private-freeform-response",
+      },
+      tool_response: { answers: { "private-question": "private-answer" } },
+    };
+    await request(question);
+    await run("PostToolUse", { ...answered, prompt_id: "other-prompt" });
+    await run("PostToolUse", payload);
+    assert.equal((await history()).at(-1)?.type, "waiting");
+    await run("PostToolUse", answered);
+    assert.deepEqual(
+      (await history()).slice(-2).map((event) => event.type),
+      ["waiting", "activity"],
+    );
+
+    // Answering a question cannot hide a separate pending tool permission.
+    await request(question);
+    await request();
+    await run("PostToolUse", answered);
+    assert.equal((await history()).at(-1)?.type, "waiting");
+    await run("PostToolUse", payload);
+    assert.equal((await history()).at(-1)?.type, "activity");
 
     const another = {
       ...payload,

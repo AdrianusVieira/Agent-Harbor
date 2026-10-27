@@ -171,6 +171,17 @@ Codex interactive question forms are not currently monitored. Asking the user a 
 
 Request/return matching uses an opaque SHA-256 fingerprint of session, prompt ID (Claude Code) or turn ID (Codex), canonical tool name, and shared tool-input metadata. The receiver keeps each source's pending waits separate, and fingerprints do not appear in event history. Matching is best effort: missing metadata, identical overlapping calls, lost or out-of-order hook delivery, or a receiver restart can leave a wait unresolved until another lifecycle signal. Claude Code runtimes that omit `prompt_id` retain the wait until another lifecycle signal. A long-running approved command can keep the orange dot until it returns. There is no timeout-based clearing or per-tool completion/error feed. Desktop/Cowork keeps its existing waiting-to-ready behavior.
 
+For Claude Code's `AskUserQuestion`, the fingerprint uses the question
+definitions from `tool_input.questions`, excluding answers, annotations, and
+other fields added during the interaction. A matching tool return can then
+resolve its tracked wait without hiding a separate pending permission. This
+answer-enrichment case is covered by isolated adapter/receiver regression tests.
+A live Claude Code question → matching tool-return working → reply-ready
+sequence has also been observed at the receiver, with the wait resolved before
+response completion. Exact browser presentation timing, Skip/cancel, and
+interruption behavior remain unverified. Past returns are not replayed to clear
+an existing wait.
+
 The stream is a history of observations. A quiet session is not proof that it stopped or is stuck, and counts are not a complete inventory of running agents. The terminal's Attention filter includes historical waiting/error events, even if a later event changed that session's status. Boat dots and summary counts use each visible boat's latest event.
 
 **Pause** freezes the displayed terminal history while events continue to arrive, within the retained buffer. Its pending count covers the selected session, or all sessions in **Event log**. **Clear view** hides the current terminal's history in this page visit; it does not clear boats or delete receiver history. Reloading restores retained events. Restarting the development server clears the receiver's history.
