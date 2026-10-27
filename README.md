@@ -6,7 +6,7 @@ Agent Harbor is an early learning project built with React, TypeScript, and Vite
 
 ## What you can see
 
-- A harbor of session boats, labeled with saved session names and platforms.
+- A harbor of session boats, labeled with saved session names, platforms, and available project labels.
 - Orange dots for input requests/errors and blue dots for ready responses, based on the latest received event.
 - Click a boat for its session history, or open **Event log** for the complete retained stream.
 - Clear individual boats until their next event arrives.
@@ -135,6 +135,19 @@ Uninstall preserves unrelated settings and hooks. Backups stay beside the corres
 
 The home view groups received events by source and session ID, showing one boat per session in alphabetical name order. Click a boat to open its terminal history, or choose **Event log** to browse all retained events. **Back to harbor** returns to the boats.
 
+When available, **Project · name** appears beneath the platform. Claude Code and
+Codex use only the final folder name from the hook's working directory, never
+the full path. This is a working-folder label, not a verified repository name or
+the Codex app's custom project title. Other senders can supply an explicit
+`projectName`; the Desktop cache observer currently supplies none. Missing
+metadata leaves the line out. The receiver retains the latest known project
+label per source/session within its in-memory history, and terminal search also
+matches it. Existing boats gain the label on a new event carrying this metadata.
+
+Project-label delivery and retention have been checked with isolated hook and
+receiver fixtures. Live client delivery and the rendered boat layout have not
+yet been verified for this addition.
+
 An orange dot marks a latest **needs input** or **error** event; a blue dot marks **reply ready**. Other statuses have no colored dot. Status text accompanies the colors. These are the latest observed signals, including when the receiver is offline; they are not proof of current processing or overall task completion.
 
 Returning to the tab, restoring the page, or reconnecting the network while Harbor is visible requests a fresh receiver snapshot. The connection indicator shows **Connecting…** until that snapshot arrives. This helps recover from stale browser connections after backgrounding; it cannot recover events the receiver never received or history lost when the server restarted.
@@ -188,7 +201,7 @@ Settings persist per browser origin and sync between its open tabs; audio activa
 
 ## Privacy and limits
 
-The bundled observers send the source, session ID, optional session name, event type, and a fixed message. Permission messages also include the tool name. They do not forward prompt text, response text, raw tool arguments, tool output/error details, transcript content, model details, or working directories. Claude Code and Codex permission/return observers additionally send an opaque matching fingerprint to the loopback receiver, derived in memory without persisting the input. This fingerprint is not encryption or anonymization. It and the bounded pending-wait state stay out of the browser's event stream. Custom session names are displayed in Harbor, so their contents are part of the monitoring data.
+The bundled observers send the source, session ID, optional session name and project label, event type, and a fixed message. Permission messages also include the tool name. They do not forward prompt text, response text, raw tool arguments, tool output/error details, transcript content, model details, or full working-directory paths. Coding-agent hooks select only the final working-folder name for the optional project label. Claude Code and Codex permission/return observers additionally send an opaque matching fingerprint to the loopback receiver, derived in memory without persisting the input. This fingerprint is not encryption or anonymization. It and the bounded pending-wait state stay out of the browser's event stream. Session names and project labels are displayed in Harbor, so their contents are part of the monitoring data.
 
 Events go to the local loopback receiver. The observers emit no context or approval decisions; delivery failures exit normally so an unavailable Harbor receiver does not block an agent. Events are not queued or retried while Harbor is offline.
 
@@ -250,6 +263,7 @@ Coding assistants should read [`AGENTS.md`](AGENTS.md); [`CLAUDE.md`](CLAUDE.md)
 ```json
 {
   "message": "Agent finished its response.",
+  "projectName": "Example project",
   "sessionId": "example-session",
   "sessionName": "Fix login",
   "source": "example-agent",
@@ -260,6 +274,7 @@ Coding assistants should read [`AGENTS.md`](AGENTS.md); [`CLAUDE.md`](CLAUDE.md)
 | Field         | Requirement                                                    |
 | ------------- | -------------------------------------------------------------- |
 | `message`     | Non-empty string, up to 4,000 characters                       |
+| `projectName` | Optional non-empty string, up to 200 characters, without control characters |
 | `sessionId`   | Non-empty string, up to 120 characters                         |
 | `sessionName` | Optional non-empty string, up to 200 characters                |
 | `source`      | Non-empty string, up to 60 characters                          |

@@ -75,7 +75,7 @@ test(
     assert.ok(address && typeof address === "object");
     const port = address.port;
     const payload = {
-      cwd: "/private-codex-project",
+      cwd: "/private-parent/HarborProject",
       hook_event_name: "Stop",
       last_assistant_message: "private-assistant-response",
       model: "private-model",
@@ -165,6 +165,7 @@ test(
       assert.ok(Number.isFinite(Date.parse(receivedAt)));
       assert.deepEqual(event, {
         message: "Codex finished its response.",
+        projectName: "HarborProject",
         sessionId: "codex-reply-test-session",
         ...(position === 2
           ? { sessionName: "Harbor name check" }

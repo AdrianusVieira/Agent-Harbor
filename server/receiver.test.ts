@@ -141,6 +141,9 @@ test("receiver validates events and delivers live events and reconnect history",
       for (const sessionName of [null, "", " ", 42, "x".repeat(201)]) {
         assert.equal((await post({ ...valid, sessionName })).status, 400);
       }
+      for (const projectName of [null, "", " ", 42, "x".repeat(201), "bad\nname"]) {
+        assert.equal((await post({ ...valid, projectName })).status, 400);
+      }
       assert.equal(
         (await post({ ...valid, message: "x".repeat(4001) })).status,
         400,
@@ -206,6 +209,23 @@ test("receiver validates events and delivers live events and reconnect history",
       assert.ok(history.startsWith("event: snapshot\n"));
       assert.ok(history.includes(event.id));
       reconnect.abort();
+    },
+  );
+
+  await t.test(
+    "retains project labels per source and session while allowing updates",
+    async () => {
+      const send = async (overrides: Record<string, unknown>) => {
+        const response = await post({ ...valid, ...overrides });
+        assert.equal(response.status, 201);
+        return (await response.json()) as HarborEvent;
+      };
+      assert.equal((await send({ projectName: "  Agent Harbor  " })).projectName, "Agent Harbor");
+      assert.equal((await send({ type: "ready" })).projectName, "Agent Harbor");
+      assert.equal((await send({ sessionId: "different-project-session" })).projectName, undefined);
+      assert.equal((await send({ source: "different-project-source" })).projectName, undefined);
+      assert.equal((await send({ projectName: "Other folder" })).projectName, "Other folder");
+      assert.equal((await send({ type: "ready" })).projectName, "Other folder");
     },
   );
 

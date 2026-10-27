@@ -73,7 +73,7 @@ test(
       background_tasks: [
         { command: "private-background-command", status: "running" },
       ],
-      cwd: "/private/reply-project",
+      cwd: "/private-parent/HarborProject",
       hook_event_name: "Stop",
       last_assistant_message: "private-assistant-response",
       session_crons: [{ prompt: "private-scheduled-prompt" }],
@@ -149,6 +149,7 @@ test(
       assert.ok(Number.isFinite(Date.parse(receivedAt)));
       assert.deepEqual(event, {
         message: "Claude Code finished its response.",
+        projectName: "HarborProject",
         sessionId: "reply-test-session",
         source: "claude-code",
         type: "ready",

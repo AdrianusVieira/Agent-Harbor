@@ -89,7 +89,7 @@ test(
     assert.ok(address && typeof address === "object");
     const port = address.port;
     const payload = {
-      cwd: "/private-project",
+      cwd: "/private-parent/HarborProject",
       hook_event_name: "PermissionRequest",
       model: "private-model",
       permission_mode: "default",
@@ -212,6 +212,7 @@ test(
       assert.ok(Number.isFinite(Date.parse(receivedAt)));
       assert.deepEqual(event, {
         message: messages[position],
+        projectName: "HarborProject",
         sessionId: "codex-permission-session",
         sessionName: "Harbor permission check",
         source: "codex",

@@ -1,5 +1,6 @@
 import type { EventInput } from "../src/events.ts";
 import { claudeApprovalKey } from "./claude-approval-key.ts";
+import { projectMetadata } from "./project-metadata.ts";
 
 // Observe the request without returning an approval decision to Claude.
 try {
@@ -11,7 +12,7 @@ try {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Invalid hook payload.");
   }
-  const { hook_event_name, session_id, tool_name } = input as Record<
+  const { cwd, hook_event_name, session_id, tool_name } = input as Record<
     string,
     unknown
   >;
@@ -39,6 +40,7 @@ try {
 
     const event: EventInput = {
       message: `Claude Code requested permission to use ${tool_name.trim()}.`,
+      ...projectMetadata(cwd),
       sessionId: session_id.trim(),
       source: "claude-code",
       type: "waiting",

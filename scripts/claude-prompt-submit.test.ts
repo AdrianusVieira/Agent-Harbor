@@ -66,7 +66,7 @@ test(
     assert.ok(address && typeof address === "object");
     const port = address.port;
     const payload = {
-      cwd: "/private/prompt-project",
+      cwd: "/private-parent/HarborProject",
       hook_event_name: "UserPromptSubmit",
       prompt: "private-prompt-text",
       session_id: "prompt-test-session",
@@ -109,6 +109,7 @@ test(
     assert.ok(Number.isFinite(Date.parse(receivedAt)));
     assert.deepEqual(event, {
       message: "Claude Code received a prompt.",
+      projectName: "HarborProject",
       sessionId: "prompt-test-session",
       sessionName: "Harbor prompt check",
       source: "claude-code",

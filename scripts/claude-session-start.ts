@@ -1,4 +1,5 @@
 import type { EventInput } from "../src/events.ts";
+import { projectMetadata } from "./project-metadata.ts";
 
 // Claude supplies one JSON payload on stdin for each matching hook invocation.
 try {
@@ -10,7 +11,7 @@ try {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Invalid hook payload.");
   }
-  const { hook_event_name, session_id, session_title, source } =
+  const { cwd, hook_event_name, session_id, session_title, source } =
     input as Record<string, unknown>;
 
   // Also check here so a manual invocation cannot mistake a resume for a start.
@@ -30,6 +31,7 @@ try {
 
     const event: EventInput = {
       message: "Claude Code session started.",
+      ...projectMetadata(cwd),
       sessionId: session_id.trim(),
       ...(typeof session_title === "string" &&
       session_title.trim() &&

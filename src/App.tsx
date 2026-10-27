@@ -123,6 +123,7 @@ export function App() {
     const previous = latestBySession.get(key);
     latestBySession.set(key, {
       ...event,
+      projectName: event.projectName ?? previous?.projectName,
       sessionName: event.sessionName ?? previous?.sessionName,
     });
   }
@@ -152,7 +153,7 @@ export function App() {
       (filter === "all" ||
         event.type === "waiting" ||
         event.type === "error") &&
-      `${event.source} ${event.sessionId} ${event.sessionName ?? ""} ${event.type} ${event.message}`
+      `${event.source} ${event.sessionId} ${event.sessionName ?? ""} ${event.projectName ?? ""} ${event.type} ${event.message}`
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
@@ -344,7 +345,7 @@ export function App() {
                         <button
                           className="boat-open"
                           onClick={() => enterTerminal(sessionKey(event))}
-                          aria-label={`Open ${name}, ${platformNames[event.source] ?? event.source}, ${eventLabels[event.type]}`}
+                          aria-label={`Open ${name}, ${platformNames[event.source] ?? event.source}${event.projectName ? `, project ${event.projectName}` : ""}, ${eventLabels[event.type]}`}
                         >
                           <span className="boat-illustration">
                             <BoatIcon />
@@ -364,6 +365,11 @@ export function App() {
                           <span className="boat-platform">
                             {platformNames[event.source] ?? event.source}
                           </span>
+                          {event.projectName && (
+                            <span className="boat-project" title={event.projectName}>
+                              Project · {event.projectName}
+                            </span>
+                          )}
                           <span className="boat-status">
                             {eventLabels[event.type]}{" "}
                             <span aria-hidden="true">·</span>{" "}

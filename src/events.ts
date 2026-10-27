@@ -9,11 +9,12 @@ export const eventTypes = [
 export type EventType = (typeof eventTypes)[number];
 
 export interface EventInput {
-  source: string;
+  message: string;
+  projectName?: string;
   sessionId: string;
   sessionName?: string;
+  source: string;
   type: EventType;
-  message: string;
 }
 
 export interface HarborEvent extends EventInput {

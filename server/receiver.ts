@@ -28,17 +28,23 @@ export function parseEvent(value: unknown): EventInput {
   if (!eventTypes.includes(input.type as EventInput["type"])) {
     throw new Error(`type must be one of: ${eventTypes.join(", ")}.`);
   }
-  if (
-    input.sessionName !== undefined &&
-    (typeof input.sessionName !== "string" ||
-      !input.sessionName.trim() ||
-      input.sessionName.length > 200)
-  ) {
-    throw new Error(
-      "sessionName must be a non-empty string of at most 200 characters.",
-    );
+  for (const field of ["projectName", "sessionName"] as const) {
+    if (
+      input[field] !== undefined &&
+      (typeof input[field] !== "string" ||
+        !input[field].trim() ||
+        input[field].length > 200 ||
+        (field === "projectName" && /[\u0000-\u001f\u007f]/.test(input[field])))
+    ) {
+      throw new Error(
+        `${field} must be a non-empty string of at most 200 characters${field === "projectName" ? " without control characters" : ""}.`,
+      );
+    }
   }
   return {
+    ...(typeof input.projectName === "string"
+      ? { projectName: input.projectName.trim() }
+      : {}),
     source: (input.source as string).trim(),
     sessionId: (input.sessionId as string).trim(),
     ...(typeof input.sessionName === "string"
@@ -67,19 +73,21 @@ export function createReceiver(networkUrls: () => string[] = () => []) {
   >();
 
   function appendEvent(input: EventInput) {
+    const previous = [...events]
+      .reverse()
+      .filter(
+        (event) =>
+          event.source === input.source && event.sessionId === input.sessionId,
+      );
+    const projectName =
+      input.projectName ?? previous.find((event) => event.projectName)?.projectName;
     const sessionName =
       input.sessionName ??
-      [...events]
-        .reverse()
-        .find(
-          (event) =>
-            event.source === input.source &&
-            event.sessionId === input.sessionId &&
-            event.sessionName,
-        )?.sessionName;
+      previous.find((event) => event.sessionName)?.sessionName;
     const event: HarborEvent = {
       ...input,
       id: randomUUID(),
+      ...(projectName ? { projectName } : {}),
       receivedAt: new Date().toISOString(),
       ...(sessionName ? { sessionName } : {}),
     };

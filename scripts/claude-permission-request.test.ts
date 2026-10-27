@@ -63,7 +63,7 @@ test(
     assert.ok(address && typeof address === "object");
     const port = address.port;
     const payload = {
-      cwd: "/private/example-project",
+      cwd: "/private-parent/HarborProject",
       hook_event_name: "PermissionRequest",
       permission_mode: "default",
       permission_suggestions: [{ behavior: "allow", type: "addRules" }],
@@ -129,6 +129,7 @@ test(
       [
         {
           message: "Claude Code requested permission to use Bash.",
+          projectName: "HarborProject",
           sessionId: "permission-test-session",
           source: "claude-code",
           type: "waiting",
@@ -136,6 +137,7 @@ test(
         {
           message:
             "Claude Code requested permission to use mcp__example__read.",
+          projectName: "HarborProject",
           sessionId: "permission-test-session",
           source: "claude-code",
           type: "waiting",

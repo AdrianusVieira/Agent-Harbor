@@ -58,7 +58,7 @@ test(
     assert.ok(address && typeof address === "object");
     const port = address.port;
     const payload = {
-      cwd: "/example/project",
+      cwd: "/private-parent/HarborProject",
       hook_event_name: "SessionStart",
       session_id: "hook-test-session",
       session_title: "Harbor startup check",
@@ -104,6 +104,7 @@ test(
     assert.ok(Number.isFinite(Date.parse(receivedAt)));
     assert.deepEqual(event, {
       message: "Claude Code session started.",
+      projectName: "HarborProject",
       sessionId: "hook-test-session",
       sessionName: "Harbor startup check",
       source: "claude-code",

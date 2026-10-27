@@ -1,6 +1,7 @@
 import type { EventInput } from "../src/events.ts";
 import { codexApprovalKey } from "./codex-approval-key.ts";
 import { readCodexSessionName } from "./codex-session-name.ts";
+import { projectMetadata } from "./project-metadata.ts";
 
 // Observe the request without returning an approval decision to Codex.
 try {
@@ -12,7 +13,7 @@ try {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Invalid hook payload.");
   }
-  const { hook_event_name, session_id, tool_name } = input as Record<
+  const { cwd, hook_event_name, session_id, tool_name } = input as Record<
     string,
     unknown
   >;
@@ -41,6 +42,7 @@ try {
     const sessionName = await readCodexSessionName(session_id.trim());
     const event: EventInput = {
       message: `Codex requested permission to use ${tool_name.trim()}.`,
+      ...projectMetadata(cwd),
       sessionId: session_id.trim(),
       ...(sessionName ? { sessionName } : {}),
       source: "codex",

@@ -89,7 +89,7 @@ test(
     assert.ok(address && typeof address === "object");
     const port = address.port;
     const payload = {
-      cwd: "/private-project",
+      cwd: "/private-parent/HarborProject",
       hook_event_name: "UserPromptSubmit",
       model: "private-model",
       permission_mode: "default",
@@ -183,6 +183,7 @@ test(
           position === 1
             ? "Codex received a prompt."
             : "Codex finished its response.",
+        projectName: "HarborProject",
         sessionId: "codex-prompt-session",
         sessionName: "Harbor prompt check",
         source: "codex",

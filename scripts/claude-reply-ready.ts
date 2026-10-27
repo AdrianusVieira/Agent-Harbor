@@ -1,4 +1,5 @@
 import type { EventInput } from "../src/events.ts";
+import { projectMetadata } from "./project-metadata.ts";
 
 // Observe a finished response without returning feedback that could continue it.
 try {
@@ -10,7 +11,7 @@ try {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Invalid hook payload.");
   }
-  const { hook_event_name, session_id } = input as Record<string, unknown>;
+  const { cwd, hook_event_name, session_id } = input as Record<string, unknown>;
 
   if (hook_event_name === "Stop") {
     if (
@@ -28,6 +29,7 @@ try {
 
     const event: EventInput = {
       message: "Claude Code finished its response.",
+      ...projectMetadata(cwd),
       sessionId: session_id.trim(),
       source: "claude-code",
       type: "ready",

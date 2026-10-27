@@ -1,5 +1,6 @@
 import type { EventInput } from "../src/events.ts";
 import { readCodexSessionName } from "./codex-session-name.ts";
+import { projectMetadata } from "./project-metadata.ts";
 
 // Observe prompt submission without returning context or blocking decisions.
 try {
@@ -11,7 +12,7 @@ try {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Invalid hook payload.");
   }
-  const { hook_event_name, session_id } = input as Record<string, unknown>;
+  const { cwd, hook_event_name, session_id } = input as Record<string, unknown>;
 
   if (hook_event_name === "UserPromptSubmit") {
     if (
@@ -30,6 +31,7 @@ try {
     const sessionName = await readCodexSessionName(session_id.trim());
     const event: EventInput = {
       message: "Codex received a prompt.",
+      ...projectMetadata(cwd),
       sessionId: session_id.trim(),
       ...(sessionName ? { sessionName } : {}),
       source: "codex",
