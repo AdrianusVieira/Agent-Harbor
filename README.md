@@ -9,7 +9,7 @@ Agent Harbor is an early learning project built with React, TypeScript, and Vite
 - A harbor of session boats, labeled with saved session names, platforms, and available project labels.
 - Orange dots for input requests/errors and blue dots for ready responses, based on the latest received event.
 - Click a boat for its session history, or open **Event log** for the complete retained stream.
-- Clear individual boats until their next event arrives.
+- Clear individual boats or the whole boat view until their next events arrive.
 - Counts based on the boats currently in view.
 - Text search and an Attention filter for input requests and errors.
 - Pause/resume and Clear view controls.
@@ -319,7 +319,7 @@ Returning to the tab, restoring the page, or reconnecting the network while Harb
 
 Claude Code and Codex boats gently sail when their latest signal is **working** and the receiver is connected. The boat and water settle when that status changes or the connection drops. Reduced-motion preferences disable the animation. Desktop/Cowork boats stay still because working detection is unsupported there.
 
-Use the **×** on a boat to clear it from the harbor. It stays hidden across reloads and reconnects until a new event arrives for that same source and session ID. Clearing a boat does not delete its history. The browser stores up to 500 dismissal markers (source/session IDs and last-event IDs) locally; if browser storage is unavailable, dismissal lasts only for the page visit. Clearing site data resets these markers.
+Use the **×** on a boat to clear it from the harbor, or **Clear view** beside **Event log** to clear all currently visible boats. Each boat stays hidden across reloads and reconnects until a new event arrives for that same source and session ID. Clearing boats does not delete their history. The browser stores up to 500 dismissal markers (source/session IDs and last-event IDs) locally; if browser storage is unavailable, dismissal lasts only for the page visit. Clearing site data resets these markers.
 
 | Label           | What was observed                                                                              |
 | --------------- | ---------------------------------------------------------------------------------------------- |
@@ -349,7 +349,7 @@ an existing wait.
 
 The stream is a history of observations. A quiet session is not proof that it stopped or is stuck, and counts are not a complete inventory of running agents. The terminal's Attention filter includes historical waiting/error events, even if a later event changed that session's status. Boat dots and summary counts use each visible boat's latest event.
 
-**Pause** freezes the displayed terminal history while events continue to arrive, within the retained buffer. Its pending count covers the selected session, or all sessions in **Event log**. **Clear view** hides the current terminal's history in this page visit; it does not clear boats or delete receiver history. Reloading restores retained events. Restarting the development server clears the receiver's history.
+**Pause** freezes the displayed terminal history while events continue to arrive, within the retained buffer. Its pending count covers the selected session, or all sessions in **Event log**. In the terminal, **Clear view** hides the current terminal's history in this page visit; it does not clear boats or delete receiver history. Reloading restores retained events, and saved signals survive server restarts.
 
 ### Session names
 

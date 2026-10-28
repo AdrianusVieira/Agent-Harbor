@@ -243,12 +243,14 @@ export function App() {
     });
   }
 
-  function dismissSession(event: HarborEvent) {
+  function dismissBoats(boats: HarborEvent[]) {
     setDismissedSessions((previous) => {
       const next = new Map(previous);
-      const key = sessionKey(event);
-      next.delete(key);
-      next.set(key, event.id);
+      for (const event of boats) {
+        const key = sessionKey(event);
+        next.delete(key);
+        next.set(key, event.id);
+      }
       return new Map([...next].slice(-EVENT_LIMIT));
     });
   }
@@ -299,7 +301,7 @@ export function App() {
                         (selected
                           ? selected.sessionId
                           : "Every signal, in sight."))
-                      : "A berth for every session."}
+                      : "A boat for every session."}
             </h1>
             <p className="intro">
               {workspace === "settings"
@@ -393,13 +395,24 @@ export function App() {
                     harbor <span className="path-divider">/</span> moorings
                   </span>
                 </div>
-                <button
-                  className="logbook-button"
-                  ref={homeButton}
-                  onClick={() => enterTerminal("*")}
-                >
-                  Event log <span aria-hidden="true">↗</span>
-                </button>
+                <div className="harbor-actions">
+                  <button
+                    className="logbook-button"
+                    onClick={() => dismissBoats(sessions)}
+                    disabled={sessions.length === 0}
+                    aria-label="Clear view: all boats"
+                    title="Clear all boats until their next events"
+                  >
+                    Clear view
+                  </button>
+                  <button
+                    className="logbook-button"
+                    ref={homeButton}
+                    onClick={() => enterTerminal("*")}
+                  >
+                    Event log <span aria-hidden="true">↗</span>
+                  </button>
+                </div>
               </div>
               <div className="harbor-legend" aria-label="Boat status legend">
                 <span>
@@ -420,7 +433,7 @@ export function App() {
                   <p>
                     {latestBySession.size
                       ? "Cleared boats return with their next event."
-                      : "Your first session will find its berth here."}
+                      : "Your first session will have a boat here."}
                   </p>
                 </div>
               ) : (
@@ -502,7 +515,7 @@ export function App() {
                         )}
                         <button
                           className="boat-dismiss"
-                          onClick={() => dismissSession(event)}
+                          onClick={() => dismissBoats([event])}
                           aria-label={`Clear boat ${name}`}
                           title="Clear boat until its next event"
                         >
@@ -515,7 +528,8 @@ export function App() {
               )}
               <div className="harbor-caption">
                 <span>
-                  Clear a boat to make room. Its next signal brings it back.
+                  Clear one boat with × or all with Clear view. New signals
+                  bring them back.
                 </span>
                 <span>Latest observed status</span>
               </div>

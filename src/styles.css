@@ -379,12 +379,19 @@ h1 {
 }
 .harbor-titlebar {
   min-height: 52px;
-  padding: 0 20px;
+  padding: 6px 20px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid var(--border);
+}
+.harbor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-left: auto;
 }
 .logbook-button,
 .session-navigation button {
